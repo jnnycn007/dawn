@@ -43,6 +43,7 @@ TINT_BEGIN_DISABLE_WARNING(SIGN_CONVERSION);
 TINT_BEGIN_DISABLE_WARNING(WEAK_VTABLES);
 TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 #include "source/opt/build_module.h"
+#include "source/opt/split_combined_image_sampler_pass.h"
 TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 TINT_END_DISABLE_WARNING(WEAK_VTABLES);
 TINT_END_DISABLE_WARNING(SIGN_CONVERSION);
@@ -72,6 +73,9 @@ constexpr auto kTargetEnv = SPV_ENV_VULKAN_1_1;
 /// Validates the SPIR-V module and then parses it to produce a Tint IR module.
 class Parser {
   public:
+    explicit Parser(const Options& options) : options_(options) {}
+    ~Parser() = default;
+
     /// @param spirv the SPIR-V binary data
     /// @returns the generated SPIR-V IR module on success, or failure
     Result<core::ir::Module> Run(Slice<const uint32_t> spirv) {
@@ -87,6 +91,14 @@ class Parser {
             spvtools::BuildModule(kTargetEnv, context.CContext()->consumer, spirv.data, spirv.len);
         if (!spirv_context_) {
             return Failure("failed to build the internal representation of the module");
+        }
+
+        {
+            spvtools::opt::SplitCombinedImageSamplerPass pass;
+            auto status = pass.Run(spirv_context_.get());
+            if (status == spvtools::opt::Pass::Status::Failure) {
+                return Failure("failed to run SplitCombinedImageSamplerPass in SPIR-V opt");
+            }
         }
 
         // Check for unsupported extensions.
@@ -126,7 +138,39 @@ class Parser {
 
         // TODO(crbug.com/tint/1907): Handle annotation instructions.
 
+        RemapSamplers();
+
         return std::move(ir_);
+    }
+
+    void RemapSamplers() {
+        for (auto* inst : *ir_.root_block) {
+            auto* var = inst->As<core::ir::Var>();
+            if (!var) {
+                continue;
+            }
+            auto* ptr = var->Result()->Type()->As<core::type::Pointer>();
+            TINT_ASSERT(ptr);
+
+            if (!ptr->StoreType()->As<core::type::Sampler>()) {
+                continue;
+            }
+
+            TINT_ASSERT(var->BindingPoint().has_value());
+
+            auto bp = var->BindingPoint().value();
+            auto used = used_bindings.GetOrAddZero(bp);
+
+            // Only one use is the sampler itself.
+            if (used == 1) {
+                continue;
+            }
+
+            auto& binding = max_binding.GetOrAddZero(bp.group);
+            binding += 1;
+
+            var->SetBindingPoint(bp.group, binding);
+        }
     }
 
     std::optional<uint16_t> GetSpecId(const spvtools::opt::Instruction& inst) {
@@ -177,6 +221,34 @@ class Parser {
                         // No spec_id means treat this as a constant.
                         AddValue(inst.result_id(), value);
                     }
+                    break;
+                }
+                case spv::Op::OpSpecConstant: {
+                    auto literal = inst.GetSingleWordInOperand(0);
+                    auto* ty = spirv_context_->get_type_mgr()->GetType(inst.type_id());
+
+                    auto* constant =
+                        spirv_context_->get_constant_mgr()->GetConstant(ty, std::vector{literal});
+
+                    core::ir::Value* value = tint::Switch(
+                        Type(ty),  //
+                        [&](const core::type::I32*) {
+                            return b_.Constant(i32(constant->GetS32()));
+                        },
+                        [&](const core::type::U32*) {
+                            return b_.Constant(u32(constant->GetU32()));
+                        },
+                        [&](const core::type::F32*) {
+                            return b_.Constant(f32(constant->GetFloat()));
+                        },
+                        [&](const core::type::F16*) {
+                            auto bits = constant->AsScalarConstant()->GetU32BitValue();
+                            return b_.Constant(f16::FromBits(static_cast<uint16_t>(bits)));
+                        },
+                        TINT_ICE_ON_NO_MATCH);
+
+                    auto spec_id = GetSpecId(inst);
+                    CreateOverride(inst, value, spec_id);
                     break;
                 }
                 case spv::Op::OpSpecConstantOp: {
@@ -334,7 +406,22 @@ class Parser {
     /// @returns a Tint type object
     const core::type::Type* Type(const spvtools::opt::analysis::Type* type,
                                  core::Access access_mode = core::Access::kUndefined) {
-        return types_.GetOrAdd(TypeKey{type, access_mode}, [&]() -> const core::type::Type* {
+        auto key_mode = core::Access::kUndefined;
+        if (type->kind() == spvtools::opt::analysis::Type::kImage) {
+            key_mode = access_mode;
+        } else if (type->kind() == spvtools::opt::analysis::Type::kPointer) {
+            // Pointers use the access mode, unless they're handle pointers in which case they get
+            // Read.
+            key_mode = access_mode;
+
+            auto* ptr = type->AsPointer();
+            if (ptr->pointee_type()->kind() == spvtools::opt::analysis::Type::kSampler ||
+                ptr->pointee_type()->kind() == spvtools::opt::analysis::Type::kImage) {
+                key_mode = core::Access::kRead;
+            }
+        }
+
+        return types_.GetOrAdd(TypeKey{type, key_mode}, [&]() -> const core::type::Type* {
             switch (type->kind()) {
                 case spvtools::opt::analysis::Type::kVoid: {
                     return ty_.void_();
@@ -385,8 +472,13 @@ class Parser {
                 }
                 case spvtools::opt::analysis::Type::kPointer: {
                     auto* ptr_ty = type->AsPointer();
-                    return ty_.ptr(AddressSpace(ptr_ty->storage_class()),
-                                   Type(ptr_ty->pointee_type()), access_mode);
+                    auto* subtype = Type(ptr_ty->pointee_type(), access_mode);
+
+                    // Handle is always a read pointer
+                    if (subtype->IsHandle()) {
+                        access_mode = core::Access::kRead;
+                    }
+                    return ty_.ptr(AddressSpace(ptr_ty->storage_class()), subtype, access_mode);
                 }
                 case spvtools::opt::analysis::Type::kSampler: {
                     return ty_.sampler();
@@ -403,7 +495,10 @@ class Parser {
                                                      : type::Multisampled::kSingleSampled;
                     auto sampled = static_cast<type::Sampled>(img->sampled());
                     auto texel_format = ToTexelFormat(img->format());
-                    auto access = ToAccess(img->access_qualifier());
+
+                    // If the access mode is undefined then default to read/write for the image
+                    access_mode = access_mode == core::Access::kUndefined ? core::Access::kReadWrite
+                                                                          : access_mode;
 
                     if (img->dim() != spv::Dim::Dim1D && img->dim() != spv::Dim::Dim2D &&
                         img->dim() != spv::Dim::Dim3D && img->dim() != spv::Dim::Cube &&
@@ -416,7 +511,7 @@ class Parser {
                     }
 
                     return ty_.Get<spirv::type::Image>(sampled_ty, dim, depth, arrayed, ms, sampled,
-                                                       texel_format, access);
+                                                       texel_format, access_mode);
                 }
                 case spvtools::opt::analysis::Type::kSampledImage: {
                     auto* sampled = type->AsSampledImage();
@@ -427,20 +522,6 @@ class Parser {
                 }
             }
         });
-    }
-
-    core::Access ToAccess(spv::AccessQualifier access) {
-        switch (access) {
-            case spv::AccessQualifier::ReadOnly:
-                return core::Access::kRead;
-            case spv::AccessQualifier::WriteOnly:
-                return core::Access::kWrite;
-            case spv::AccessQualifier::ReadWrite:
-                return core::Access::kReadWrite;
-            default:
-                break;
-        }
-        TINT_ICE() << "unknown access qualifier: " << static_cast<uint32_t>(access);
     }
 
     core::TexelFormat ToTexelFormat(spv::ImageFormat fmt) {
@@ -1309,6 +1390,12 @@ class Parser {
                 case spv::Op::OpArrayLength:
                     EmitArrayLength(inst);
                     break;
+                case spv::Op::OpSampledImage:
+                    EmitSampledImage(inst);
+                    break;
+                case spv::Op::OpImageGather:
+                    EmitImageGather(inst);
+                    break;
                 default:
                     TINT_UNIMPLEMENTED()
                         << "unhandled SPIR-V instruction: " << static_cast<uint32_t>(inst.opcode());
@@ -1332,6 +1419,31 @@ class Parser {
             const auto& merge_bb = current_spirv_function_->FindBlock(merge_id);
             EmitBlock(dst, *merge_bb);
         }
+    }
+
+    void EmitSampledImage(const spvtools::opt::Instruction& inst) {
+        auto* tex = Value(inst.GetSingleWordInOperand(0));
+        Emit(b_.CallExplicit<spirv::ir::BuiltinCall>(Type(inst.type_id()),
+                                                     spirv::BuiltinFn::kSampledImage,
+                                                     Vector{tex->Type()}, Args(inst, 2)),
+             inst.result_id());
+    }
+
+    void EmitImageGather(const spvtools::opt::Instruction& inst) {
+        Vector<core::ir::Value*, 4> args;
+
+        auto sampled_image = Value(inst.GetSingleWordInOperand(0));
+        auto* coord = Value(inst.GetSingleWordInOperand(1));
+        auto* comp = Value(inst.GetSingleWordInOperand(2));
+
+        core::ir::Value* operands = b_.Zero(ty_.i32());
+        if (inst.NumInOperands() > 3) {
+            operands = Value(inst.GetSingleWordInOperand(3));
+        }
+
+        Emit(b_.Call<spirv::ir::BuiltinCall>(Type(inst.type_id()), spirv::BuiltinFn::kImageGather,
+                                             Vector{sampled_image, coord, comp, operands}),
+             inst.result_id());
     }
 
     void EmitAtomicSigned(const spvtools::opt::Instruction& inst, spirv::BuiltinFn fn) {
@@ -2419,6 +2531,9 @@ class Parser {
              spirv_context_->get_decoration_mgr()->GetDecorationsFor(inst.result_id(), false)) {
             auto d = deco->GetSingleWordOperand(1);
             switch (spv::Decoration(d)) {
+                case spv::Decoration::NonReadable:
+                    access_mode = core::Access::kWrite;
+                    break;
                 case spv::Decoration::NonWritable:
                     access_mode = core::Access::kRead;
                     break;
@@ -2457,14 +2572,34 @@ class Parser {
             }
         }
 
-        auto* var = b_.Var(Type(inst.type_id(), access_mode)->As<core::type::Pointer>());
+        auto* element_ty = Type(inst.type_id(), access_mode)->As<core::type::Pointer>();
+        auto* var = b_.Var(element_ty);
         if (inst.NumOperands() > 3) {
             var->SetInitializer(Value(inst.GetSingleWordOperand(3)));
         }
 
         if (group || binding) {
             TINT_ASSERT(group && binding);
-            var->SetBindingPoint(group.value(), binding.value());
+
+            // Remap any samplers which match an entry in the sampler mappings
+            // table.
+            if (element_ty->StoreType()->Is<core::type::Sampler>()) {
+                auto it =
+                    options_.sampler_mappings.find(BindingPoint{group.value(), binding.value()});
+                if (it != options_.sampler_mappings.end()) {
+                    auto bp = it->second;
+                    group = bp.group;
+                    binding = bp.binding;
+                }
+            }
+
+            auto& grp = max_binding.GetOrAddZero(group.value());
+            grp = std::max(grp, binding.value());
+
+            auto& used = used_bindings.GetOrAddZero(BindingPoint{group.value(), binding.value()});
+            used += 1;
+
+            io_attributes.binding_point = {group.value(), binding.value()};
         }
         var->SetAttributes(std::move(io_attributes));
 
@@ -2488,6 +2623,9 @@ class Parser {
         tint::HashCode HashCode() const { return Hash(type, access_mode); }
     };
 
+    /// The parser options
+    const Options& options_;
+
     /// The generated IR module.
     core::ir::Module ir_;
     /// The Tint IR builder.
@@ -2505,6 +2643,10 @@ class Parser {
     Hashmap<uint32_t, core::ir::Function*, 8> functions_;
     /// A map from a SPIR-V result ID to the corresponding Tint value object.
     Hashmap<uint32_t, core::ir::Value*, 8> values_;
+    /// Maps a `group` number to the largest seen `binding` value for that group
+    Hashmap<uint32_t, uint32_t, 4> max_binding;
+    /// A map of binding point to the count of usages
+    Hashmap<BindingPoint, uint32_t, 4> used_bindings;
 
     /// The SPIR-V context containing the SPIR-V tools intermediate representation.
     std::unique_ptr<spvtools::opt::IRContext> spirv_context_;
@@ -2547,8 +2689,8 @@ class Parser {
 
 }  // namespace
 
-Result<core::ir::Module> Parse(Slice<const uint32_t> spirv) {
-    return Parser{}.Run(spirv);
+Result<core::ir::Module> Parse(Slice<const uint32_t> spirv, const Options& options) {
+    return Parser(options).Run(spirv);
 }
 
 }  // namespace tint::spirv::reader

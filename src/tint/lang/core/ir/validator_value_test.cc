@@ -86,6 +86,21 @@ TEST_F(IR_ValidatorTest, Var_RootBlock_NullResult) {
 )")) << res.Failure();
 }
 
+TEST_F(IR_ValidatorTest, Var_RootBlock_TooManyResults) {
+    auto* v = b.Var(ty.ptr(private_, ty.i32()));
+    v->SetInitializer(b.Constant(0_i));
+    v->SetResults(Vector{b.InstructionResult<i32>(), b.InstructionResult<i32>()});
+    mod.root_block->Append(v);
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(R"(:2:20 error: var: expected exactly 1 results, got 2
+  %1:i32, %2:i32 = var 0i
+                   ^^^
+)")) << res.Failure();
+}
+
 TEST_F(IR_ValidatorTest, Var_VoidType) {
     mod.root_block->Append(b.Var(ty.ptr(private_, ty.void_())));
 
@@ -132,6 +147,25 @@ TEST_F(IR_ValidatorTest, Var_Function_NoResult) {
                 testing::HasSubstr(R"(:3:13 error: var: expected exactly 1 results, got 0
     undef = var 1i
             ^^^
+)")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Var_Function_TooManyResults) {
+    auto* f = b.Function("my_func", ty.void_());
+
+    b.Append(f->Block(), [&] {
+        auto* v = b.Var<function, i32>();
+        v->SetInitializer(b.Constant(0_i));
+        v->SetResults(Vector{b.InstructionResult<i32>(), b.InstructionResult<i32>()});
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(R"(:3:22 error: var: expected exactly 1 results, got 2
+    %2:i32, %3:i32 = var 0i
+                     ^^^
 )")) << res.Failure();
 }
 
@@ -234,8 +268,8 @@ TEST_F(IR_ValidatorTest, Var_Private_UnexpectedInputAttachmentIndex) {
 )")) << res.Failure();
 }
 
-TEST_F(IR_ValidatorTest, Var_PushConstant_UnexpectedInputAttachmentIndex) {
-    auto* v = b.Var<push_constant, f32>();
+TEST_F(IR_ValidatorTest, Var_Immediate_UnexpectedInputAttachmentIndex) {
+    auto* v = b.Var<immediate, f32>();
     v->SetInputAttachmentIndex(0);
     mod.root_block->Append(v);
 
@@ -243,9 +277,10 @@ TEST_F(IR_ValidatorTest, Var_PushConstant_UnexpectedInputAttachmentIndex) {
     ASSERT_NE(res, Success);
     EXPECT_THAT(res.Failure().reason,
                 testing::HasSubstr(
-                    R"(:2:38 error: var: '@input_attachment_index' is not valid for non-handle var
-  %1:ptr<push_constant, f32, read> = var undef @input_attachment_index(0)
-                                     ^^^
+                    R"(:2:34 error: var: '@input_attachment_index' is not valid for non-handle var
+  %1:ptr<immediate, f32, read> = var undef @input_attachment_index(0)
+                                 ^^^
+
 )")) << res.Failure();
 }
 
@@ -488,10 +523,8 @@ TEST_F(IR_ValidatorTest, Var_Storage_NotHostShareable) {
 
 TEST_F(IR_ValidatorTest, Var_MultipleIOAnnotations) {
     auto* v = b.Var<AddressSpace::kIn, vec4<f32>>();
-    IOAttributes attr;
-    attr.builtin = BuiltinValue::kPosition;
-    attr.location = 0;
-    v->SetAttributes(attr);
+    v->SetBuiltin(BuiltinValue::kPosition);
+    v->SetLocation(0);
     mod.root_block->Append(v);
 
     auto res = ir::Validate(mod);
@@ -606,6 +639,38 @@ TEST_F(IR_ValidatorTest, Var_BindingArray_Texture_NonHandleAddressSpace) {
             R"(:2:62 error: var: handle types can only be declared in the 'handle' address space
   %1:ptr<private, binding_array<texture_2d<f32>, 4>, read> = var undef
                                                              ^^^
+)")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Var_InputAttachementIndex_NonHandle) {
+    auto* v = b.Var(ty.ptr(AddressSpace::kPrivate, ty.f32(), read_write));
+    v->SetInputAttachmentIndex(0);
+    mod.root_block->Append(v);
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(
+                    R"(:2:38 error: var: '@input_attachment_index' is not valid for non-handle var
+  %1:ptr<private, f32, read_write> = var undef @input_attachment_index(0)
+                                     ^^^
+)")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Var_InputAttachementIndex_WrongType) {
+    auto* v = b.Var(ty.ptr(AddressSpace::kHandle, ty.f32(), read_write));
+    v->SetBindingPoint(0, 0);
+    v->SetInputAttachmentIndex(0);
+    mod.root_block->Append(v);
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(
+        res.Failure().reason,
+        testing::HasSubstr(
+            R"(:2:37 error: var: '@input_attachment_index' is only valid for 'input_attachment' type var
+  %1:ptr<handle, f32, read_write> = var undef @binding_point(0, 0) @input_attachment_index(0)
+                                    ^^^
 )")) << res.Failure();
 }
 

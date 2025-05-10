@@ -35,6 +35,7 @@
 #include "src/tint/lang/hlsl/writer/helpers/generate_bindings.h"
 #include "src/tint/lang/hlsl/writer/writer.h"
 #include "src/tint/utils/command/command.h"
+
 namespace tint::hlsl::writer {
 namespace {
 
@@ -97,6 +98,10 @@ Result<SuccessType> IRFuzzer(core::ir::Module& module,
     }
 
     auto output = Generate(module, options);
+    if (output != Success) {
+        TINT_ICE() << "Generate() failed after CanGenerate() succeeded: "
+                   << output.Failure().reason;
+    }
 
     if (output == Success && context.options.dump) {
         std::cout << "Dumping generated HLSL:\n" << output->hlsl << "\n";

@@ -229,19 +229,22 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
                             mFunctions.IsGLExtensionSupported("GL_ARB_texture_compression_bptc") ||
                             mFunctions.IsGLExtensionSupported("GL_EXT_texture_compression_bptc");
 
+        bool supportsBCSliced3D = true;
+        if (mVendorId == gpu_info::kVendorID_Nvidia) {
+            supportsBCSliced3D &= mFunctions.IsAtLeastGL(4, 2);
+        }
+
         if (supportsS3TC && (supportsTextureSRGB || supportsS3TCSRGB) && supportsRGTC &&
             supportsBPTC) {
             EnableFeature(Feature::TextureCompressionBC);
-            EnableFeature(Feature::TextureCompressionBCSliced3D);
+            if (supportsBCSliced3D) {
+                EnableFeature(Feature::TextureCompressionBCSliced3D);
+            }
         }
     }
 
     if (mFunctions.IsGLExtensionSupported("GL_KHR_texture_compression_astc_ldr")) {
         EnableFeature(Feature::TextureCompressionASTC);
-
-        if (mFunctions.IsGLExtensionSupported("GL_KHR_texture_compression_astc_sliced_3d")) {
-            EnableFeature(Feature::TextureCompressionASTCSliced3D);
-        }
     }
 
     // ETC2 is core in ES 3.0.

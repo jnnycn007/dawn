@@ -151,6 +151,7 @@ enum class Toggle {
     D3D12RelaxMinSubgroupSizeTo8,
     D3D12RelaxBufferTextureCopyPitchAndOffsetAlignment,
     UseVulkanMemoryModel,
+    VulkanScalarizeClampBuiltin,
     VulkanAddWorkToEmptyResolvePass,
 
     // Unresolved issues.
@@ -163,6 +164,7 @@ enum class Toggle {
 
     D3D11UseUnmonitoredFence,
     D3D11DisableFence,
+    D3D11DelayFlushToGPU,
     IgnoreImportedAHardwareBufferVulkanImageSize,
 
     EnumCount,

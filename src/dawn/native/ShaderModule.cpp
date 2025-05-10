@@ -728,9 +728,9 @@ ResultOrError<std::unique_ptr<EntryPointMetadata>> ReflectEntryPointUsingTint(
     metadata->interStageVariables.resize(maxInterStageShaderVariables);
 
     // Immediate data byte size must be 4-byte aligned.
-    if (entryPoint.push_constant_size) {
-        DAWN_ASSERT(IsAligned(entryPoint.push_constant_size, 4u));
-        metadata->immediateDataRangeByteSize = entryPoint.push_constant_size;
+    if (entryPoint.immediate_data_size) {
+        DAWN_ASSERT(IsAligned(entryPoint.immediate_data_size, 4u));
+        metadata->immediateDataRangeByteSize = entryPoint.immediate_data_size;
     }
 
     // Vertex shader specific reflection.
@@ -1651,7 +1651,7 @@ Ref<TintProgram> ShaderModuleBase::GetTintProgram() {
                 descriptor.nextInChain = &spirvDescriptor;
                 break;
             case Type::Wgsl:
-                wgslDescriptor.code = mWgsl.c_str();
+                wgslDescriptor.code = std::string_view(mWgsl);
                 descriptor.nextInChain = &wgslDescriptor;
                 break;
             default:

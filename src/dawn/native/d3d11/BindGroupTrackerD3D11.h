@@ -50,36 +50,74 @@ class BindGroupTracker : public BindGroupTrackerBase</*CanInheritBindGroups=*/tr
     explicit BindGroupTracker(const ScopedSwapStateCommandRecordingContext* commandContext);
     virtual ~BindGroupTracker();
 
-    const ScopedSwapStateCommandRecordingContext* GetCommandContext() const;
-
   protected:
     template <wgpu::ShaderStage kVisibleStage>
     MaybeError ApplyBindGroup(BindGroupIndex index);
 
-    void VSSetConstantBuffer(uint32_t idx,
-                             ID3D11Buffer* d3d11Buffer,
-                             uint32_t firstConstant,
-                             uint32_t numConstants);
-    void PSSetConstantBuffer(uint32_t idx,
-                             ID3D11Buffer* d3d11Buffer,
-                             uint32_t firstConstant,
-                             uint32_t numConstants);
-    void CSSetConstantBuffer(uint32_t idx,
-                             ID3D11Buffer* d3d11Buffer,
-                             uint32_t firstConstant,
-                             uint32_t numConstants);
-    void VSSetShaderResource(uint32_t idx, ComPtr<ID3D11ShaderResourceView> srv);
-    void PSSetShaderResource(uint32_t idx, ComPtr<ID3D11ShaderResourceView> srv);
-    void CSSetShaderResource(uint32_t idx, ComPtr<ID3D11ShaderResourceView> srv);
-    void VSSetSampler(uint32_t idx, ID3D11SamplerState* sampler);
-    void PSSetSampler(uint32_t idx, ID3D11SamplerState* sampler);
-    void CSSetSampler(uint32_t idx, ID3D11SamplerState* sampler);
-    void CSSetUnorderedAccessView(uint32_t idx, ComPtr<ID3D11UnorderedAccessView> uav);
-    void OMSetUnorderedAccessViews(uint32_t startSlot,
+    template <SingleShaderStage Stage>
+    void SetConstantBuffer(uint32_t idx,
+                           ID3D11Buffer* d3d11Buffer,
+                           uint32_t firstConstant,
+                           uint32_t numConstants);
+
+    template <SingleShaderStage Stage>
+    void SetShaderResource(uint32_t idx, ID3D11ShaderResourceView* srv);
+
+    template <SingleShaderStage Stage>
+    void SetSampler(uint32_t idx, ID3D11SamplerState* sampler);
+
+    void CSSetUnorderedAccessView(uint32_t idx, ID3D11UnorderedAccessView* uav);
+
+    void OMSetUnorderedAccessViews(uint32_t idx,
                                    uint32_t count,
                                    ID3D11UnorderedAccessView* const* uavs);
 
+    template <SingleShaderStage Stage>
+    void UnbindConstantBuffers();
+    template <SingleShaderStage Stage>
+    void UnbindShaderResources();
+    template <SingleShaderStage Stage>
+    void UnbindSamplers();
+    template <SingleShaderStage Stage>
+    void UnbindUnorderedAccessViews();
+
+    template <typename T>
+    ResultOrError<ComPtr<T>> GetBufferD3DView(
+        BindGroupBase* group,
+        BindingIndex bindingIndex,
+        const BufferBindingInfo& layout,
+        const ityp::vector<BindingIndex, uint64_t>& dynamicOffsets);
+
+    template <typename T>
+    ResultOrError<ComPtr<T>> GetTextureD3DView(BindGroupBase* group, BindingIndex bindingIndex);
+
   private:
+    struct ConstantBufferBinding {
+        bool operator==(const ConstantBufferBinding& rhs) const {
+            return buffer.Get() == rhs.buffer.Get() && firstConstant == rhs.firstConstant &&
+                   numConstants == rhs.numConstants;
+        }
+
+        ComPtr<ID3D11Buffer> buffer;
+        UINT firstConstant = 0;
+        UINT numConstants = 0;
+    };
+
+    ResultOrError<ConstantBufferBinding> GetConstantBufferBinding(
+        BindGroupBase* group,
+        BindingIndex bindingIndex,
+        const BufferBindingInfo& layout,
+        const ityp::vector<BindingIndex, uint64_t>& dynamicOffsets);
+
+    ResultOrError<ComPtr<ID3D11ShaderResourceView>> GetTextureShaderResourceView(
+        BindGroupBase* group,
+        BindingIndex bindingIndex);
+    ResultOrError<ComPtr<ID3D11UnorderedAccessView>> GetTextureUnorderedAccessView(
+        BindGroupBase* group,
+        BindingIndex bindingIndex);
+
+    ID3D11SamplerState* GetSamplerState(BindGroupBase* group, BindingIndex bindingIndex);
+
     raw_ptr<const ScopedSwapStateCommandRecordingContext> mCommandContext;
 
     // This class will track the current bound resources and prevent redundant bindings.
@@ -95,33 +133,16 @@ class BindGroupTracker : public BindGroupTrackerBase</*CanInheritBindGroups=*/tr
         absl::InlinedVector<T, InitialCapacity> mBoundSlots;
     };
 
-    struct ConstantBufferBinding {
-        bool operator==(const ConstantBufferBinding& rhs) const {
-            return buffer.Get() == rhs.buffer.Get() && firstConstant == rhs.firstConstant &&
-                   numConstants == rhs.numConstants;
-        }
+    PerStage<BindingSlot<ConstantBufferBinding, 4>> mConstantBufferSlots;
 
-        ComPtr<ID3D11Buffer> buffer;
-        UINT firstConstant = 0;
-        UINT numConstants = 0;
-    };
+    PerStage<BindingSlot<ComPtr<ID3D11ShaderResourceView>, 4>> mSRVSlots;
 
-    BindingSlot<ConstantBufferBinding, 4> mVSConstantBufferSlots;
-    BindingSlot<ConstantBufferBinding, 4> mPSConstantBufferSlots;
-    BindingSlot<ConstantBufferBinding, 4> mCSConstantBufferSlots;
+    PerStage<BindingSlot<ComPtr<ID3D11SamplerState>, 4>> mSamplerSlots;
 
-    BindingSlot<ComPtr<ID3D11ShaderResourceView>, 4> mVSSRVSlots;
-    BindingSlot<ComPtr<ID3D11ShaderResourceView>, 4> mPSSRVSlots;
-    BindingSlot<ComPtr<ID3D11ShaderResourceView>, 4> mCSSRVSlots;
-
-    BindingSlot<ComPtr<ID3D11SamplerState>, 4> mVSSamplerSlots;
-    BindingSlot<ComPtr<ID3D11SamplerState>, 4> mPSSamplerSlots;
-    BindingSlot<ComPtr<ID3D11SamplerState>, 4> mCSSamplerSlots;
-
+    // We only track individual UAV slot in CS because UAV slots in PS must be bound all as one.
     BindingSlot<ComPtr<ID3D11UnorderedAccessView>, 4> mCSUAVSlots;
 
-    uint32_t mCSMinUAVSlot = D3D11_1_UAV_SLOT_COUNT;
-    uint32_t mPSMinUAVSlot = D3D11_1_UAV_SLOT_COUNT;
+    PerStage<uint32_t> mMinUAVSlots = PerStage<uint32_t>(D3D11_1_UAV_SLOT_COUNT);
     uint32_t mPSMaxUAVSlot = 0;
 };
 

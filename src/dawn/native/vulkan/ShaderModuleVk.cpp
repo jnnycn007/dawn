@@ -99,73 +99,6 @@ size_t TransformedShaderModuleCacheKeyHashFunc::operator()(
     return hash;
 }
 
-class ShaderModule::ConcurrentTransformedShaderModuleCache {
-  public:
-    explicit ConcurrentTransformedShaderModuleCache(Device* device) : mDevice(device) {}
-
-    ~ConcurrentTransformedShaderModuleCache() {
-        std::lock_guard<std::mutex> lock(mMutex);
-
-        for (const auto& [_, moduleAndSpirv] : mTransformedShaderModuleCache) {
-            mDevice->GetFencedDeleter()->DeleteWhenUnused(moduleAndSpirv.vkModule);
-        }
-    }
-
-    std::optional<ModuleAndSpirv> Find(const TransformedShaderModuleCacheKey& key) {
-        std::lock_guard<std::mutex> lock(mMutex);
-
-        auto iter = mTransformedShaderModuleCache.find(key);
-        if (iter != mTransformedShaderModuleCache.end()) {
-            return iter->second.AsRefs();
-        }
-        return {};
-    }
-    ModuleAndSpirv AddOrGet(const TransformedShaderModuleCacheKey& key,
-                            VkShaderModule module,
-                            CompiledSpirv compilation,
-                            bool hasInputAttachment) {
-        DAWN_ASSERT(module != VK_NULL_HANDLE);
-        std::lock_guard<std::mutex> lock(mMutex);
-
-        auto iter = mTransformedShaderModuleCache.find(key);
-        if (iter == mTransformedShaderModuleCache.end()) {
-            bool added = false;
-            std::tie(iter, added) = mTransformedShaderModuleCache.emplace(
-                key, Entry{module, std::move(compilation.spirv), hasInputAttachment});
-            DAWN_ASSERT(added);
-        } else {
-            // No need to use FencedDeleter since this shader module was just created and does
-            // not need to wait for queue operations to complete.
-            // Also, use of fenced deleter here is not thread safe.
-            mDevice->fn.DestroyShaderModule(mDevice->GetVkDevice(), module, nullptr);
-        }
-        return iter->second.AsRefs();
-    }
-
-  private:
-    struct Entry {
-        VkShaderModule vkModule;
-        std::vector<uint32_t> spirv;
-        bool hasInputAttachment;
-
-        ModuleAndSpirv AsRefs() const {
-            return {
-                vkModule,
-                spirv.data(),
-                spirv.size(),
-                hasInputAttachment,
-            };
-        }
-    };
-
-    raw_ptr<Device> mDevice;
-    std::mutex mMutex;
-    absl::flat_hash_map<TransformedShaderModuleCacheKey,
-                        Entry,
-                        TransformedShaderModuleCacheKeyHashFunc>
-        mTransformedShaderModuleCache;
-};
-
 // static
 ResultOrError<Ref<ShaderModule>> ShaderModule::Create(
     Device* device,
@@ -181,9 +114,7 @@ ResultOrError<Ref<ShaderModule>> ShaderModule::Create(
 ShaderModule::ShaderModule(Device* device,
                            const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
                            std::vector<tint::wgsl::Extension> internalExtensions)
-    : ShaderModuleBase(device, descriptor, std::move(internalExtensions)),
-      mTransformedShaderModuleCache(
-          std::make_unique<ConcurrentTransformedShaderModuleCache>(device)) {}
+    : ShaderModuleBase(device, descriptor, std::move(internalExtensions)) {}
 
 MaybeError ShaderModule::Initialize(
     ShaderModuleParseResult* parseResult,
@@ -193,8 +124,6 @@ MaybeError ShaderModule::Initialize(
 
 void ShaderModule::DestroyImpl() {
     ShaderModuleBase::DestroyImpl();
-    // Remove reference to internal cache to trigger cleanup.
-    mTransformedShaderModuleCache = nullptr;
 }
 
 ShaderModule::~ShaderModule() = default;
@@ -236,10 +165,6 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     auto cacheKey = TransformedShaderModuleCacheKey{reinterpret_cast<uintptr_t>(layout),
                                                     programmableStage.entryPoint.c_str(),
                                                     programmableStage.constants, emitPointSize};
-    auto handleAndSpirv = mTransformedShaderModuleCache->Find(cacheKey);
-    if (handleAndSpirv.has_value()) {
-        return std::move(*handleAndSpirv);
-    }
 
 #if TINT_BUILD_SPV_WRITER
     // Creation of module and spirv is deferred to this point when using tint generator
@@ -383,6 +308,8 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
         GetDevice()->IsToggleEnabled(Toggle::DisablePolyfillsOnIntegerDivisonAndModulo);
     req.tintOptions.use_vulkan_memory_model =
         GetDevice()->IsToggleEnabled(Toggle::UseVulkanMemoryModel);
+    req.tintOptions.scalarize_clamp_builtin =
+        GetDevice()->IsToggleEnabled(Toggle::VulkanScalarizeClampBuiltin);
 
     // Pass matrices to user functions by pointer on Qualcomm devices to workaround a known bug.
     // See crbug.com/tint/2045.
@@ -499,19 +426,14 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
             device->fn.CreateShaderModule(device->GetVkDevice(), &createInfo, nullptr, &*newHandle),
             "CreateShaderModule"));
     }
+    DAWN_CHECK(newHandle != VK_NULL_HANDLE);
 
-    ModuleAndSpirv moduleAndSpirv;
-    if (newHandle != VK_NULL_HANDLE) {
-        device->GetBlobCache()->EnsureStored(compilation);
+    device->GetBlobCache()->EnsureStored(compilation);
+    SetDebugName(ToBackend(GetDevice()), newHandle, "Dawn_ShaderModule", GetLabel());
 
-        // Set the label on `newHandle` now, and not on `moduleAndSpirv.module` later
-        // since `moduleAndSpirv.module` may be in use by multiple threads.
-        SetDebugName(ToBackend(GetDevice()), newHandle, "Dawn_ShaderModule", GetLabel());
-        moduleAndSpirv = mTransformedShaderModuleCache->AddOrGet(
-            cacheKey, newHandle, compilation.Acquire(), hasInputAttachment);
-    }
-
-    return std::move(moduleAndSpirv);
+    return ModuleAndSpirv{.module = newHandle,
+                          .spirv = std::move(compilation->spirv),
+                          .hasInputAttachment = hasInputAttachment};
 #else
     return DAWN_INTERNAL_ERROR("TINT_BUILD_SPV_WRITER is not defined.");
 #endif

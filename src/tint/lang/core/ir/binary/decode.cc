@@ -1232,8 +1232,8 @@ struct Decoder {
                 return core::AddressSpace::kPixelLocal;
             case pb::AddressSpace::private_:
                 return core::AddressSpace::kPrivate;
-            case pb::AddressSpace::push_constant:
-                return core::AddressSpace::kPushConstant;
+            case pb::AddressSpace::immediate:
+                return core::AddressSpace::kImmediate;
             case pb::AddressSpace::storage:
                 return core::AddressSpace::kStorage;
             case pb::AddressSpace::uniform:
@@ -1477,6 +1477,8 @@ struct Decoder {
                 return core::BuiltinValue::kSampleIndex;
             case pb::BuiltinValue::sample_mask:
                 return core::BuiltinValue::kSampleMask;
+            case pb::BuiltinValue::subgroup_id:
+                return core::BuiltinValue::kSubgroupId;
             case pb::BuiltinValue::subgroup_invocation_id:
                 return core::BuiltinValue::kSubgroupInvocationId;
             case pb::BuiltinValue::subgroup_size:

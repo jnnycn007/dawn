@@ -116,7 +116,8 @@ class State {
         core::ir::Capabilities caps{core::ir::Capability::kAllowRefTypes,
                                     core::ir::Capability::kAllowOverrides,
                                     core::ir::Capability::kAllowPhonyInstructions};
-        if (auto res = core::ir::Validate(mod, caps); res != Success) {
+        if (auto res = core::ir::ValidateAndDumpIfNeeded(mod, "wgsl.to_program", caps);
+            res != Success) {
             // IR module failed validation.
             b.Diagnostics().AddError(Source{}) << res.Failure();
             return Program{resolver::Resolve(b)};
@@ -607,8 +608,8 @@ class State {
                 Enable(wgsl::Extension::kChromiumExperimentalPixelLocal);
                 b.GlobalVar(name, ty, init, ref->AddressSpace(), std::move(attrs));
                 return;
-            case core::AddressSpace::kPushConstant:
-                Enable(wgsl::Extension::kChromiumExperimentalPushConstant);
+            case core::AddressSpace::kImmediate:
+                Enable(wgsl::Extension::kChromiumExperimentalImmediate);
                 b.GlobalVar(name, ty, init, ref->AddressSpace(), std::move(attrs));
                 return;
             default:

@@ -124,7 +124,7 @@ SpvStorageClass StorageClass(core::AddressSpace addrspace) {
             return SpvStorageClassInput;
         case core::AddressSpace::kPrivate:
             return SpvStorageClassPrivate;
-        case core::AddressSpace::kPushConstant:
+        case core::AddressSpace::kImmediate:
             return SpvStorageClassPushConstant;
         case core::AddressSpace::kOut:
             return SpvStorageClassOutput;
@@ -180,6 +180,23 @@ const core::type::Type* DedupType(const core::type::Type* ty, core::type::Manage
         },
 
         [&](Default) { return ty; });
+}
+
+/// @returns true if @p type is or contains a subgroup matrix type at any nesting
+bool ContainsSubgroupMatrix(const core::type::Type* type) {
+    return tint::Switch(
+        type,  //
+        [&](const core::type::SubgroupMatrix*) { return true; },
+        [&](const core::type::Array* arr) { return ContainsSubgroupMatrix(arr->ElemType()); },
+        [&](const core::type::Struct* str) {
+            for (auto& member : str->Members()) {
+                if (ContainsSubgroupMatrix(member->Type())) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        [](Default) { return false; });
 }
 
 /// PIMPL class for SPIR-V writer
@@ -282,7 +299,7 @@ class Printer {
 
     /// Builds the SPIR-V from the IR
     Result<SuccessType> Generate() {
-        auto valid = core::ir::ValidateAndDumpIfNeeded(ir_, "spirv.Printer");
+        auto valid = core::ir::ValidateAndDumpIfNeeded(ir_, "spirv.Printer", kPrinterCapabilities);
         if (valid != Success) {
             return valid.Failure();
         }
@@ -353,6 +370,9 @@ class Printer {
                 return SpvBuiltInSampleId;
             case core::BuiltinValue::kSampleMask:
                 return SpvBuiltInSampleMask;
+            case core::BuiltinValue::kSubgroupId:
+                module_.PushCapability(SpvCapabilityGroupNonUniform);
+                return SpvBuiltInSubgroupId;
             case core::BuiltinValue::kSubgroupInvocationId:
                 module_.PushCapability(SpvCapabilityGroupNonUniform);
                 return SpvBuiltInSubgroupLocalInvocationId;
@@ -465,12 +485,35 @@ class Printer {
         return constant_nulls_.GetOrAdd(type, [&] {
             auto id = module_.NextId();
 
-            if (auto* sm = type->As<core::type::SubgroupMatrix>()) {
+            if (ContainsSubgroupMatrix(type)) {
                 // OpConstantNull is not supported for CooperativeMatrix types on some drivers, so
                 // use OpConstantComposite instead.
                 // See crbug.com/407532165.
-                module_.PushType(spv::Op::OpConstantComposite,
-                                 {Type(type), id, Constant(b_.Zero(sm->Type()))});
+                Switch(
+                    type,
+                    [&](const core::type::SubgroupMatrix* sm) {
+                        module_.PushType(spv::Op::OpConstantComposite,
+                                         {Type(type), id, Constant(b_.Zero(sm->Type()))});
+                    },
+                    [&](const core::type::Array* arr) {
+                        OperandList operands = {Type(arr), id};
+                        for (uint32_t i = 0; i < arr->ConstantCount(); i++) {
+                            operands.push_back(ConstantNull(arr->ElemType()));
+                        }
+                        module_.PushType(spv::Op::OpConstantComposite, operands);
+                    },
+                    [&](const core::type::Struct* str) {
+                        OperandList operands = {Type(str), id};
+                        for (auto* member : str->Members()) {
+                            if (ContainsSubgroupMatrix(member->Type())) {
+                                operands.push_back(ConstantNull(member->Type()));
+                            } else {
+                                operands.push_back(Constant(b_.Zero(member->Type())));
+                            }
+                        }
+                        module_.PushType(spv::Op::OpConstantComposite, operands);
+                    },
+                    TINT_ICE_ON_NO_MATCH);
             } else {
                 module_.PushType(spv::Op::OpConstantNull, {Type(type), id});
             }
@@ -507,9 +550,7 @@ class Printer {
                 [&](const core::type::U32*) {
                     module_.PushType(spv::Op::OpTypeInt, {id, 32u, 0u});
                 },
-                [&](const core::type::F32*) {
-                    module_.PushType(spv::Op::OpTypeFloat, {id, 32u});
-                },
+                [&](const core::type::F32*) { module_.PushType(spv::Op::OpTypeFloat, {id, 32u}); },
                 [&](const core::type::F16*) {
                     module_.PushCapability(SpvCapabilityFloat16);
                     module_.PushCapability(SpvCapabilityUniformAndStorageBuffer16BitAccess);
@@ -2142,7 +2183,7 @@ class Printer {
 
         // Zero-value constructors for subgroup matrices are not folded into constants, so
         // special-case them into OpConstantNull here.
-        if (result_ty->Is<core::type::SubgroupMatrix>() && construct->Operands().IsEmpty()) {
+        if (ContainsSubgroupMatrix(result_ty) && construct->Operands().IsEmpty()) {
             values_.Add(construct->Result(), ConstantNull(result_ty));
             return;
         }
@@ -2547,7 +2588,7 @@ class Printer {
                 module_.PushType(spv::Op::OpVariable, operands);
                 break;
             }
-            case core::AddressSpace::kPushConstant: {
+            case core::AddressSpace::kImmediate: {
                 TINT_ASSERT(!current_function_);
                 module_.PushType(spv::Op::OpVariable,
                                  {ty, id, U32Operand(SpvStorageClassPushConstant)});

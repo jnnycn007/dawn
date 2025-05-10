@@ -982,8 +982,22 @@ class Validator {
     void CheckFunctionReturnAttributesAndType(const Function* func, IMPL&& impl) {
         if (func->ReturnType()->Is<core::type::Struct>() &&
             func->ReturnAttributes().builtin.has_value()) {
-            const auto& checker = BuiltinCheckerFor(func->ReturnAttributes().builtin.value());
-            AddError(func) << checker.name << " cannot be attached to a structure";
+            const char* name;
+            switch (func->ReturnAttributes().builtin.value()) {
+                case BuiltinValue::kPosition:
+                    name = "position";
+                    break;
+                case BuiltinValue::kSampleMask:
+                    name = "sample_mask";
+                    break;
+                case BuiltinValue::kClipDistances:
+                    name = "clip_distances";
+                    break;
+                default:
+                    name = BuiltinCheckerFor(func->ReturnAttributes().builtin.value()).name;
+                    break;
+            }
+            AddError(func) << name << " cannot be attached to a structure";
         }
 
         CheckIOAttributesAndType(func, func->ReturnAttributes(), func->ReturnType(),
@@ -1885,6 +1899,23 @@ void Validator::CheckType(const core::type::Type* root,
                 }
                 return true;
             },
+            [&](const core::type::MultisampledTexture* ms) {
+                if (!ms->Type()->IsAnyOf<core::type::F32, core::type::I32, core::type::U32>()) {
+                    diag() << "invalid multisampled texture sample type: " << NameOf(ms->Type());
+                    return false;
+                }
+
+                switch (ms->Dim()) {
+                    case core::type::TextureDimension::k2d:
+                    case core::type::TextureDimension::k2dArray:
+                        break;
+                    default:
+                        diag() << "invalid multisampled texture dimension: "
+                               << style::Literal(ToString(ms->Dim()));
+                        return false;
+                }
+                return true;
+            },
             [&](const core::type::StorageTexture* s) {
                 switch (s->Dim()) {
                     case core::type::TextureDimension::kCube:
@@ -2140,6 +2171,14 @@ void Validator::CheckFunction(const Function* func) {
             if (param->BindingPoint().has_value()) {
                 AddError(param)
                     << "input param to non-entry point function has a binding point set";
+            }
+        }
+
+        if (!capabilities_.Contains(Capability::kAllowWorkspacePointerInputToEntryPoint) &&
+            func->IsEntryPoint()) {
+            if (mv && mv->Is<core::type::Pointer>() && address_space == AddressSpace::kWorkgroup) {
+                AddError(param) << "input param to entry point cannot be a ptr in the 'workgroup' "
+                                   "address space";
             }
         }
 
@@ -2590,10 +2629,17 @@ void Validator::CheckVar(const Var* var) {
         }
     }
 
-    // Check that non-handle variables don't have @input_attachment_index set
-    if (var->InputAttachmentIndex().has_value() && mv->AddressSpace() != AddressSpace::kHandle) {
-        AddError(var) << "'@input_attachment_index' is not valid for non-handle var";
-        return;
+    if (var->InputAttachmentIndex().has_value()) {
+        if (mv->AddressSpace() != AddressSpace::kHandle) {
+            AddError(var) << "'@input_attachment_index' is not valid for non-handle var";
+            return;
+        }
+        if (!capabilities_.Contains(Capability::kAllowAnyInputAttachmentIndexType) &&
+            !mv->UnwrapPtrOrRef()->Is<core::type::InputAttachment>()) {
+            AddError(var)
+                << "'@input_attachment_index' is only valid for 'input_attachment' type var";
+            return;
+        }
     }
 
     if (var->Block() == mod_.root_block) {
@@ -3750,11 +3796,12 @@ Result<SuccessType> Validate(const Module& mod, Capabilities capabilities) {
 
 Result<SuccessType> ValidateAndDumpIfNeeded([[maybe_unused]] const Module& ir,
                                             [[maybe_unused]] const char* msg,
-                                            [[maybe_unused]] Capabilities capabilities) {
+                                            [[maybe_unused]] Capabilities capabilities,
+                                            [[maybe_unused]] std::string_view timing) {
 #if TINT_DUMP_IR_WHEN_VALIDATING
     auto printer = StyledTextPrinter::Create(stdout);
     std::cout << "=========================================================\n";
-    std::cout << "== IR dump before " << msg << ":\n";
+    std::cout << "== IR dump " << timing << " " << msg << ":\n";
     std::cout << "=========================================================\n";
     printer->Print(Disassembler(ir).Text());
 #endif

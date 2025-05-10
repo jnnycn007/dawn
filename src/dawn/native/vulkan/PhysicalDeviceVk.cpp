@@ -134,10 +134,9 @@ MaybeError PhysicalDevice::InitializeImpl() {
 #if DAWN_PLATFORM_IS(WINDOWS)
     // Disable Vulkan adapter on Windows Intel driver < 30.0.101.2111 due to flaky
     // issues.
-    const gpu_info::DriverVersion kDriverVersion({30, 0, 101, 2111});
+    const gpu_info::IntelWindowsDriverVersion kDriverVersion({30, 0, 101, 2111});
     if (gpu_info::IsIntel(mDeviceInfo.properties.vendorID) &&
-        gpu_info::CompareWindowsDriverVersion(mDeviceInfo.properties.vendorID, mDriverVersion,
-                                              kDriverVersion) == -1) {
+        gpu_info::IntelWindowsDriverVersion(mDriverVersion) < kDriverVersion) {
         return DAWN_FORMAT_INTERNAL_ERROR(
             "Disable Intel Vulkan adapter on Windows driver version %s. See "
             "https://crbug.com/1338622.",
@@ -473,7 +472,10 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         !shaderF16Enabled ||
         (mDeviceInfo.shaderSubgroupExtendedTypes.shaderSubgroupExtendedTypes == VK_TRUE);
 
-    if (!kForceDisableSubgroups && hasBaseSubgroupSupport && hasRequiredF16Support) {
+    // Some devices (PowerVR GE8320) can apparently report subgroup size of 1.
+    const bool allowSubgroupSizeRanges = mSubgroupMinSize >= 4u && mSubgroupMaxSize <= 128u;
+    if (!kForceDisableSubgroups && hasBaseSubgroupSupport && hasRequiredF16Support &&
+        allowSubgroupSizeRanges) {
         EnableFeature(Feature::Subgroups);
     }
 
@@ -545,7 +547,7 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         EnableFeature(Feature::DawnDrmFormatCapabilities);
     }
 
-    EnableFeature(Feature::ChromiumExperimentalImmediateData);
+    EnableFeature(Feature::ChromiumExperimentalImmediate);
 }
 
 MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits) {
@@ -810,6 +812,10 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         // resolve target doesn't perform the resolve. To work around it, add a small amount of work
         // to the pass to force it to execute.
         deviceToggles->Default(Toggle::VulkanAddWorkToEmptyResolvePass, true);
+
+        // chromium:407109052: Qualcomm devices have a bug where the spirv extended op NClamp
+        // modifies other components of a vector when one of the components is nan.
+        deviceToggles->Default(Toggle::VulkanScalarizeClampBuiltin, true);
     }
 
     if (IsAndroidARM()) {
