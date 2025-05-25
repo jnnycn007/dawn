@@ -642,11 +642,20 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
     {Toggle::VulkanScalarizeClampBuiltin,
      {"vulkan_scalarize_clamp_builtin", "Scalarize calls to the clamp builtin.",
       "https://crbug.com/407109052", ToggleStage::Device}},
+    {Toggle::VulkanDirectVariableAccessTransformHandle,
+     {"vulkan_direct_variable_access_transform_handle",
+      "Transform handles using direct variable access.", "https://crbug.com/387000529",
+      ToggleStage::Device}},
     {Toggle::VulkanAddWorkToEmptyResolvePass,
      {"vulkan_add_work_to_empty_resolve_pass",
       "Adds a small amount of work to empty render passes which perform a resolve. This toggle is "
       "enabled by default on Qualcomm GPUs, where it is needed to force the resolve to complete.",
       "https://crbug.com/411656647", ToggleStage::Device}},
+    {Toggle::EnableIntegerRangeAnalysisInRobustness,
+     {"enable_integer_range_analysis_in_robustness",
+      "Compute the range of the index with Integer Range Analysis in the robustness transform and "
+      "skip doing index clamping when the out of bound access cannot happen.",
+      "https://crbug.com/348701956", ToggleStage::Device}},
     {Toggle::NoWorkaroundSampleMaskBecomesZeroForAllButLastColorTarget,
      {"no_workaround_sample_mask_becomes_zero_for_all_but_last_color_target",
       "MacOS 12.0+ Intel has a bug where the sample mask is only applied for the last color "
