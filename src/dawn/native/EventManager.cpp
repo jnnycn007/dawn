@@ -295,9 +295,18 @@ EventManager::~EventManager() {
 
 MaybeError EventManager::Initialize(const UnpackedPtr<InstanceDescriptor>& descriptor) {
     if (descriptor) {
-        mTimedWaitAnyEnable = descriptor->capabilities.timedWaitAnyEnable;
-        mTimedWaitAnyMaxCount =
-            std::max(kTimedWaitAnyMaxCountDefault, descriptor->capabilities.timedWaitAnyMaxCount);
+        for (auto feature :
+             std::span(descriptor->requiredFeatures, descriptor->requiredFeatureCount)) {
+            switch (feature) {
+                case wgpu::InstanceFeatureName::TimedWaitAny:
+                    mTimedWaitAnyEnable = true;
+                    break;
+            }
+        }
+        if (descriptor->requiredLimits) {
+            mTimedWaitAnyMaxCount = std::max(kTimedWaitAnyMaxCountDefault,
+                                             descriptor->requiredLimits->timedWaitAnyMaxCount);
+        }
     }
     if (mTimedWaitAnyMaxCount > kTimedWaitAnyMaxCountDefault) {
         // We don't yet support a higher timedWaitAnyMaxCount because it would be complicated
@@ -594,7 +603,7 @@ EventManager::TrackedEvent::TrackedEvent(wgpu::CallbackMode callbackMode, NonPro
 
 EventManager::TrackedEvent::~TrackedEvent() {
     DAWN_ASSERT(mFutureID != kNullFutureID);
-    DAWN_ASSERT(mCompleted);
+    DAWN_ASSERT(mCompleted.Use([](auto completed) { return *completed; }));
 }
 
 Future EventManager::TrackedEvent::GetFuture() const {
@@ -632,10 +641,12 @@ void EventManager::TrackedEvent::SetReadyToComplete() {
 }
 
 void EventManager::TrackedEvent::EnsureComplete(EventCompletionType completionType) {
-    bool alreadyComplete = mCompleted.exchange(true);
-    if (!alreadyComplete) {
-        Complete(completionType);
-    }
+    mCompleted.Use([&](auto completed) {
+        if (!*completed) {
+            Complete(completionType);
+            *completed = true;
+        }
+    });
 }
 
 }  // namespace dawn::native
