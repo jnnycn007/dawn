@@ -58,7 +58,6 @@
     },
     "proc": {
         "category": "function pointer",
-        "returns": "void",
         "args": []
     },
     "get proc address": {
@@ -84,7 +83,6 @@
         "category": "structure",
         "chained": "in",
         "chain roots": ["request adapter options"],
-        "tags": ["upstream", "emscripten"],
         "members": [
             {"name": "xr compatible", "type": "bool"}
         ]
@@ -153,7 +151,6 @@
             },
             {
                 "name": "get features",
-                "returns": "void",
                 "args": [
                     {"name": "features", "type": "supported features", "annotation": "*"}
                 ]
@@ -319,7 +316,6 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -353,7 +349,6 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -632,7 +627,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -652,8 +646,7 @@
                 "returns": "buffer map state"
             },
             {
-                "name": "unmap",
-                "no autolock": true
+                "name": "unmap"
             },
             {
                 "name": "destroy"
@@ -773,7 +766,6 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -906,7 +898,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -1067,7 +1058,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -1105,7 +1095,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -1224,7 +1213,7 @@
             {
                 "name": "create buffer",
                 "no autolock": true,
-                "returns": "buffer",
+                "returns": {"type": "buffer", "optional": true},
                 "args": [
                     {"name": "descriptor", "type": "buffer descriptor", "annotation": "const*"}
                 ]
@@ -1405,7 +1394,6 @@
             },
             {
                 "name": "get features",
-                "returns": "void",
                 "args": [
                     {"name": "features", "type": "supported features", "annotation": "*"}
                 ]
@@ -1471,7 +1459,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -1630,6 +1617,14 @@
             {"name": "features", "type": "feature name", "annotation": "const*", "length": "feature count"}
         ]
     },
+    "supported instance features": {
+        "category": "structure",
+        "out": true,
+        "members": [
+            {"name": "feature count", "type": "size_t"},
+            {"name": "features", "type": "instance feature name", "annotation": "const*", "length": "feature count"}
+        ]
+    },
     "supported WGSL language features": {
         "category": "structure",
         "out": true,
@@ -1704,22 +1699,18 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
             },
             {
-                "name": "destroy",
-                "returns": "void"
+                "name": "destroy"
             },
             {
-                "name": "expire",
-                "returns": "void"
+                "name": "expire"
             },
             {
-                "name": "refresh",
-                "returns": "void"
+                "name": "refresh"
             }
         ]
     },
@@ -1771,7 +1762,6 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -1836,7 +1826,6 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -2083,7 +2072,6 @@
         "methods": [
             {
                 "name": "export info",
-                "returns": "void",
                 "args": [
                     {"name": "info", "type": "shared fence export info", "annotation": "*"}
                 ]
@@ -2257,24 +2245,26 @@
     "feature name": {
         "category": "enum",
         "values": [
-            {"value": 1, "name": "depth clip control"},
-            {"value": 2, "name": "depth32 float stencil8"},
-            {"value": 3, "name": "timestamp query"},
+            {"value": 1, "name": "core features and limits"},
+            {"value": 2, "name": "depth clip control"},
+            {"value": 3, "name": "depth32 float stencil8"},
             {"value": 4, "name": "texture compression BC"},
             {"value": 5, "name": "texture compression BC sliced 3D"},
             {"value": 6, "name": "texture compression ETC2"},
             {"value": 7, "name": "texture compression ASTC"},
             {"value": 8, "name": "texture compression ASTC sliced 3D"},
-            {"value": 9, "name": "indirect first instance"},
-            {"value": 10, "name": "shader f16"},
-            {"value": 11, "name": "RG11B10 ufloat renderable"},
-            {"value": 12, "name": "BGRA8 unorm storage"},
-            {"value": 13, "name": "float32 filterable", "jsrepr": "'float32-filterable'"},
-            {"value": 14, "name": "float32 blendable", "jsrepr": "'float32-blendable'"},
-            {"value": 15, "name": "clip distances"},
-            {"value": 16, "name": "dual source blending"},
-            {"value": 17, "name": "subgroups"},
-            {"value": 18, "name": "core features and limits", "jsrepr": "'core-features-and-limits'"},
+            {"value": 9, "name": "timestamp query"},
+            {"value": 10, "name": "indirect first instance"},
+            {"value": 11, "name": "shader f16"},
+            {"value": 12, "name": "RG11B10 ufloat renderable"},
+            {"value": 13, "name": "BGRA8 unorm storage"},
+            {"value": 14, "name": "float32 filterable", "jsrepr": "'float32-filterable'"},
+            {"value": 15, "name": "float32 blendable", "jsrepr": "'float32-blendable'"},
+            {"value": 16, "name": "clip distances"},
+            {"value": 17, "name": "dual source blending"},
+            {"value": 18, "name": "subgroups"},
+            {"value": 19, "name": "texture formats tier1"},
+            {"value": 20, "name": "texture formats tier2"},
 
             {"value": 0, "name": "dawn internal usages", "tags": ["dawn"]},
             {"value": 1, "name": "dawn multi planar formats", "tags": ["dawn"]},
@@ -2335,7 +2325,7 @@
             {"value": 55, "name": "chromium experimental subgroup matrix", "tags": ["dawn"]},
             {"value": 56, "name": "shared fence EGL sync", "tags": ["dawn", "native"]},
             {"value": 57, "name": "dawn device allocator control", "tags": ["dawn"]},
-            {"value": 58, "name": "texture formats tier1", "tags": ["dawn"]}
+            {"value": 58, "name": "texture component swizzle", "tags": ["dawn"]}
         ]
     },
     "filter mode": {
@@ -2443,7 +2433,7 @@
                 "returns": "wait status",
                 "args": [
                     {"name": "future count", "type": "size_t"},
-                    {"name": "futures", "type": "future wait info", "annotation": "*", "length": "future count"},
+                    {"name": "futures", "type": "future wait info", "annotation": "*", "length": "future count", "optional": true, "no_default": true},
                     {"name": "timeout NS", "type": "uint64_t"}
                 ]
             },
@@ -2503,27 +2493,48 @@
             {"name": "completed", "type": "bool", "default": "false"}
         ]
     },
-    "instance capabilities": {
+    "instance limits": {
         "category": "structure",
         "extensible": "out",
-        "_comment": "TODO(crbug.com/374263404): Using 'out' for extensible even though this can be in/out until C++ gen is updated.",
         "members": [
-            {"name": "timed wait any enable", "type": "bool", "default": "false"},
             {"name": "timed wait any max count", "type": "size_t", "default": "0"}
+        ]
+    },
+    "instance feature name": {
+        "category": "enum",
+        "values": [
+            {"value": 1, "name": "timed wait any"},
+            {"value": 2, "name": "shader source SPIRV", "tags": ["upstream"]},
+            {"value": 3, "name": "multiple devices per adapter", "tags": ["upstream"]}
         ]
     },
     "instance descriptor": {
         "category": "structure",
         "extensible": "in",
         "members": [
-            {"name": "capabilities", "type": "instance capabilities"}
+            {"name": "required feature count", "type": "size_t", "default": 0},
+            {"name": "required features", "type": "instance feature name", "annotation": "const*", "length": "required feature count", "default": "nullptr"},
+            {"name": "required limits", "type": "instance limits", "annotation": "const*", "optional": true}
         ]
     },
-    "get instance capabilities": {
+    "get instance features": {
+        "category": "function",
+        "args": [
+            {"name": "features", "type": "supported instance features", "annotation": "*"}
+        ]
+    },
+    "has instance feature": {
+        "category": "function",
+        "returns": "bool",
+        "args": [
+            {"name": "feature", "type": "instance feature name"}
+        ]
+    },
+    "get instance limits": {
         "category": "function",
         "returns": "status",
         "args": [
-            {"name": "capabilities", "type": "instance capabilities", "annotation": "*"}
+            {"name": "limits", "type": "instance limits", "annotation": "*"}
         ]
     },
     "dawn wire WGSL control": {
@@ -2636,7 +2647,6 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -2649,7 +2659,7 @@
         "members": [
             {"name": "label", "type": "string view", "optional": true},
             {"name": "bind group layout count", "type": "size_t"},
-            {"name": "bind group layouts", "type": "bind group layout", "annotation": "const*", "length": "bind group layout count", "optional": true},
+            {"name": "bind group layouts", "type": "bind group layout", "annotation": "const*", "length": "bind group layout count", "array_element_optional": true},
             {"name": "immediate size", "type": "uint32_t", "default": 0}
         ]
     },
@@ -2718,7 +2728,6 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -2812,7 +2821,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -2855,7 +2863,6 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -2958,7 +2965,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -3048,7 +3054,8 @@
     },
     "render pass descriptor max draw count": {
         "category": "typedef",
-        "type": "render pass max draw count"
+        "type": "render pass max draw count",
+        "tags": ["dawn"]
     },
     "render pass max draw count": {
         "category": "structure",
@@ -3161,6 +3168,7 @@
             },
             {
                 "name": "multi draw indirect",
+                "tags": ["dawn", "emscripten"],
                 "args": [
                     {"name": "indirect buffer", "type": "buffer"},
                     {"name": "indirect offset", "type": "uint64_t"},
@@ -3172,6 +3180,7 @@
             },
             {
                 "name": "multi draw indexed indirect",
+                "tags": ["dawn", "emscripten"],
                 "args": [
                     {"name": "indirect buffer", "type": "buffer"},
                     {"name": "indirect offset", "type": "uint64_t"},
@@ -3279,7 +3288,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -3307,7 +3315,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -3452,7 +3459,6 @@
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -3488,7 +3494,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -3504,7 +3509,8 @@
     },
     "shader module SPIRV descriptor": {
         "category": "typedef",
-        "type": "shader source SPIRV"
+        "type": "shader source SPIRV",
+        "tags": ["dawn"]
     },
     "shader source SPIRV": {
         "category": "structure",
@@ -3517,7 +3523,8 @@
     },
     "shader module WGSL descriptor": {
         "category": "typedef",
-        "type": "shader source WGSL"
+        "type": "shader source WGSL",
+        "tags": ["dawn"]
     },
     "shader source WGSL": {
         "category": "structure",
@@ -3584,7 +3591,6 @@
         "methods": [
             {
                 "name": "configure",
-                "returns": "void",
                 "args": [
                     {"name": "config", "type": "surface configuration", "annotation": "const*"}
                 ]
@@ -3599,24 +3605,21 @@
             },
             {
                 "name": "get current texture",
-                "returns": "void",
                 "args": [
                     {"name": "surface texture", "type": "surface texture", "annotation": "*"}
                 ]
             },
             {
                 "name": "present",
-                "returns": "void",
+                "returns": "status",
                 "args": []
             },
             {
                 "name": "unconfigure",
-                "returns": "void",
                 "args": []
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -3633,7 +3636,7 @@
     "surface descriptor from android native window": {
         "category": "typedef",
         "type": "surface source android native window",
-        "tags": ["art", "native"]
+        "tags": ["art", "native", "dawn"]
     },
     "surface source android native window": {
         "category": "structure",
@@ -3656,7 +3659,7 @@
     "surface descriptor from metal layer": {
         "category": "typedef",
         "type": "surface source metal layer",
-        "tags": ["native"]
+        "tags": ["native", "dawn"]
     },
     "surface source metal layer": {
         "category": "structure",
@@ -3670,7 +3673,7 @@
     "surface descriptor from windows HWND": {
         "category": "typedef",
         "type": "surface source windows HWND",
-        "tags": ["native"]
+        "tags": ["native", "dawn"]
     },
     "surface source windows HWND": {
         "category": "structure",
@@ -3685,7 +3688,7 @@
     "surface descriptor from xcb window": {
         "category": "typedef",
         "type": "surface source XCB window",
-        "tags": ["native"]
+        "tags": ["native", "dawn"]
     },
     "surface source XCB window": {
         "category": "structure",
@@ -3700,7 +3703,7 @@
     "surface descriptor from xlib window": {
         "category": "typedef",
         "type": "surface source xlib window",
-        "tags": ["native"]
+        "tags": ["native", "dawn"]
     },
     "surface source xlib window": {
         "category": "structure",
@@ -3715,7 +3718,7 @@
     "surface descriptor from wayland surface": {
         "category": "typedef",
         "type": "surface source wayland surface",
-        "tags": ["native"]
+        "tags": ["native", "dawn"]
     },
     "surface source wayland surface": {
         "category": "structure",
@@ -3758,7 +3761,6 @@
         "category": "structure",
         "chained": "in",
         "chain roots": ["surface descriptor"],
-        "tags": ["upstream", "emscripten"],
         "members": [
             {"name": "color space", "type": "predefined color space"},
             {"name": "tone mapping mode", "type": "tone mapping mode"}
@@ -3766,7 +3768,6 @@
     },
     "predefined color space": {
         "category": "enum",
-        "tags": ["upstream", "emscripten"],
         "values": [
             {"value": 1, "name": "sRGB"},
             {"value": 2, "name": "display p3"}
@@ -3774,7 +3775,6 @@
     },
     "tone mapping mode": {
         "category": "enum",
-        "tags": ["upstream", "emscripten"],
         "values": [
             {"value": 1, "name": "standard"},
             {"value": 2, "name": "extended"}
@@ -3801,8 +3801,8 @@
             {"value": 7, "name": "surface source wayland surface"},
             {"value": 8, "name": "surface source android native window"},
             {"value": 9, "name": "surface source XCB window"},
-            {"value": 10, "name": "surface color management", "tags": ["upstream", "emscripten"]},
-            {"value": 11, "name": "request adapter WebXR options", "tags": ["upstream", "emscripten"]},
+            {"value": 10, "name": "surface color management"},
+            {"value": 11, "name": "request adapter WebXR options"},
 
             {"value": 0, "name": "compatibility mode limits", "tags": ["compat"]},
             {"value": 1, "name": "texture binding view dimension descriptor", "tags": ["compat"]},
@@ -3879,7 +3879,8 @@
             {"value": 67, "name": "dawn host mapped pointer limits", "tags": ["dawn"]},
             {"value": 68, "name": "render pass descriptor resolve rect", "tags": ["dawn"]},
             {"value": 69, "name": "request adapter WebGPU backend options", "tags": ["dawn", "native"]},
-            {"value": 70, "name": "dawn fake device initialize error for testing", "tags": ["dawn"]}
+            {"value": 70, "name": "dawn fake device initialize error for testing", "tags": ["dawn"]},
+            {"value": 71, "name": "texture component swizzle descriptor", "tags": ["dawn"]}
         ]
     },
     "texture": {
@@ -3902,7 +3903,6 @@
             },
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -3986,6 +3986,7 @@
         "category": "structure",
         "chained": "in",
         "chain roots": ["texture descriptor"],
+        "tags": ["compat"],
         "members": [
             {"name": "texture binding view dimension", "type": "texture view dimension"}
         ]
@@ -4153,12 +4154,20 @@
             {"name": "usage", "type": "texture usage"}
         ]
     },
+    "texture component swizzle descriptor": {
+        "category": "structure",
+        "tags": ["dawn"],
+        "chained": "in",
+        "chain roots": ["texture view descriptor"],
+        "members": [
+            {"name": "swizzle", "type": "texture component swizzle"}
+        ]
+    },
     "texture view": {
         "category": "object",
         "methods": [
             {
                 "name": "set label",
-                "returns": "void",
                 "args": [
                     {"name": "label", "type": "string view"}
                 ]
@@ -4175,6 +4184,30 @@
             {"value": 4, "name": "cube"},
             {"value": 5, "name": "cube array"},
             {"value": 6, "name": "3D"}
+        ]
+    },
+    "texture component swizzle": {
+        "category": "structure",
+        "tags": ["dawn"],
+        "extensible": false,
+        "members": [
+            {"name": "r", "type": "component swizzle", "default": "r"},
+            {"name": "g", "type": "component swizzle", "default": "g"},
+            {"name": "b", "type": "component swizzle", "default": "b"},
+            {"name": "a", "type": "component swizzle", "default": "a"}
+        ]
+    },
+    "component swizzle": {
+        "category": "enum",
+        "tags": ["dawn"],
+        "values": [
+            {"value": 0, "name": "undefined", "jsrepr": "undefined"},
+            {"value": 1, "name": "zero"},
+            {"value": 2, "name": "one"},
+            {"value": 3, "name": "r"},
+            {"value": 4, "name": "g"},
+            {"value": 5, "name": "b"},
+            {"value": 6, "name": "a"}
         ]
     },
     "y cb cr vk descriptor": {
@@ -4250,8 +4283,8 @@
             {"value": 2, "name": "packed 4x8 integer dot product", "jsrepr": "'packed_4x8_integer_dot_product'"},
             {"value": 3, "name": "unrestricted pointer parameters", "jsrepr": "'unrestricted_pointer_parameters'"},
             {"value": 4, "name": "pointer composite access", "jsrepr": "'pointer_composite_access'"},
-            {"value": 5, "name": "sized binding array", "jsrepr": "'sized_binding_array'"},
-            {"value": 6, "name": "texel buffers", "jsrepr": "'texel_buffers'"},
+            {"value": 5, "name": "sized binding array", "jsrepr": "'sized_binding_array'", "tags": ["dawn"]},
+            {"value": 6, "name": "texel buffers", "jsrepr": "'texel_buffers'", "tags": ["dawn"]},
 
             {"value": 0, "name": "chromium testing unimplemented", "jsrepr": "'chromium_testing_unimplemented'", "tags": ["dawn"]},
             {"value": 1, "name": "chromium testing unsafe experimental", "jsrepr": "'chromium_testing_unsafe_experimental'", "tags": ["dawn"]},
@@ -4329,15 +4362,16 @@
       "category": "native"
     },
     "void": {
-        "category": "native",
-        "wasm type": "v"
+        "category": "native"
     },
     "void *": {
         "category": "native",
+        "is nullable pointer": true,
         "wasm type": "p"
     },
     "void const *": {
         "category": "native",
+        "is nullable pointer": true,
         "wasm type": "p"
     },
     "int": {
@@ -4454,11 +4488,14 @@
     "subgroup matrix component type": {
         "category": "enum",
         "emscripten_no_enum_table": true,
+        "tags": ["dawn"],
         "values": [
             {"value": 1, "name": "f32"},
             {"value": 2, "name": "f16"},
             {"value": 3, "name": "u32"},
-            {"value": 4, "name": "i32"}
+            {"value": 4, "name": "i32"},
+            {"value": 5, "name": "u8"},
+            {"value": 6, "name": "i8"}
         ]
     },
     "subgroup matrix config": {

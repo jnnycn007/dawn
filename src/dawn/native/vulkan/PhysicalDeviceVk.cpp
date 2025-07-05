@@ -84,6 +84,35 @@ gpu_info::DriverVersion DecodeVulkanDriverVersion(uint32_t vendorID, uint32_t ve
     return driverVersion;
 }
 
+bool VKComponentTypeToWGPUSubgroupMatrixComponentType(
+    wgpu::SubgroupMatrixComponentType* wgpuComponentType,
+    VkComponentTypeKHR vkComponentType) {
+    DAWN_ASSERT(wgpuComponentType != nullptr);
+
+    switch (vkComponentType) {
+        case VK_COMPONENT_TYPE_FLOAT32_KHR:
+            *wgpuComponentType = wgpu::SubgroupMatrixComponentType::F32;
+            return true;
+        case VK_COMPONENT_TYPE_FLOAT16_KHR:
+            *wgpuComponentType = wgpu::SubgroupMatrixComponentType::F16;
+            return true;
+        case VK_COMPONENT_TYPE_UINT32_KHR:
+            *wgpuComponentType = wgpu::SubgroupMatrixComponentType::U32;
+            return true;
+        case VK_COMPONENT_TYPE_SINT32_KHR:
+            *wgpuComponentType = wgpu::SubgroupMatrixComponentType::I32;
+            return true;
+        case VK_COMPONENT_TYPE_UINT8_KHR:
+            *wgpuComponentType = wgpu::SubgroupMatrixComponentType::U8;
+            return true;
+        case VK_COMPONENT_TYPE_SINT8_KHR:
+            *wgpuComponentType = wgpu::SubgroupMatrixComponentType::I8;
+            return true;
+        default:
+            return false;
+    }
+}
+
 }  // anonymous namespace
 
 PhysicalDevice::PhysicalDevice(VulkanInstance* vulkanInstance, VkPhysicalDevice physicalDevice)
@@ -1295,6 +1324,15 @@ void PhysicalDevice::PopulateBackendFormatCapabilities(
 void PhysicalDevice::PopulateSubgroupMatrixConfigs() {
     size_t configCount = mDeviceInfo.cooperativeMatrixConfigs.size();
     mSubgroupMatrixConfigs.reserve(configCount);
+
+    auto SupportComponentType = [&](wgpu::SubgroupMatrixComponentType componentType) {
+        if (componentType == wgpu::SubgroupMatrixComponentType::F16) {
+            TogglesState togglesState(ToggleStage::Adapter);
+            return IsFeatureSupportedWithToggles(wgpu::FeatureName::ShaderF16, togglesState);
+        }
+        return true;
+    };
+
     for (uint32_t i = 0; i < configCount; i++) {
         const VkCooperativeMatrixPropertiesKHR& p = mDeviceInfo.cooperativeMatrixConfigs[i];
 
@@ -1308,37 +1346,20 @@ void PhysicalDevice::PopulateSubgroupMatrixConfigs() {
         config.M = p.MSize;
         config.N = p.NSize;
         config.K = p.KSize;
-        switch (p.AType) {
-            case VK_COMPONENT_TYPE_FLOAT32_KHR:
-                config.componentType = wgpu::SubgroupMatrixComponentType::F32;
-                break;
-            case VK_COMPONENT_TYPE_FLOAT16_KHR:
-                config.componentType = wgpu::SubgroupMatrixComponentType::F16;
-                break;
-            case VK_COMPONENT_TYPE_UINT32_KHR:
-                config.componentType = wgpu::SubgroupMatrixComponentType::U32;
-                break;
-            case VK_COMPONENT_TYPE_SINT32_KHR:
-                config.componentType = wgpu::SubgroupMatrixComponentType::I32;
-                break;
-            default:
-                continue;
+
+        // Filter out the component types that WebGPU does not support.
+        if (!VKComponentTypeToWGPUSubgroupMatrixComponentType(&config.componentType, p.AType)) {
+            continue;
         }
-        switch (p.ResultType) {
-            case VK_COMPONENT_TYPE_FLOAT32_KHR:
-                config.resultComponentType = wgpu::SubgroupMatrixComponentType::F32;
-                break;
-            case VK_COMPONENT_TYPE_FLOAT16_KHR:
-                config.resultComponentType = wgpu::SubgroupMatrixComponentType::F16;
-                break;
-            case VK_COMPONENT_TYPE_UINT32_KHR:
-                config.resultComponentType = wgpu::SubgroupMatrixComponentType::U32;
-                break;
-            case VK_COMPONENT_TYPE_SINT32_KHR:
-                config.resultComponentType = wgpu::SubgroupMatrixComponentType::I32;
-                break;
-            default:
-                continue;
+        if (!SupportComponentType(config.componentType)) {
+            continue;
+        }
+        if (!VKComponentTypeToWGPUSubgroupMatrixComponentType(&config.resultComponentType,
+                                                              p.ResultType)) {
+            continue;
+        }
+        if (!SupportComponentType(config.resultComponentType)) {
+            continue;
         }
 
         mSubgroupMatrixConfigs.push_back(config);

@@ -903,10 +903,6 @@ bool Validator::Const(const sem::Variable*) const {
 bool Validator::Parameter(const sem::Variable* var) const {
     auto* decl = var->Declaration();
 
-    if (IsValidationDisabled(decl->attributes, ast::DisabledValidation::kFunctionParameter)) {
-        return true;
-    }
-
     if (auto* ref = var->Type()->As<core::type::Pointer>()) {
         bool ok = false;
 
@@ -949,8 +945,7 @@ bool Validator::Parameter(const sem::Variable* var) const {
 bool Validator::BuiltinAttribute(const ast::BuiltinAttribute* attr,
                                  const core::type::Type* storage_ty,
                                  ast::PipelineStage stage,
-                                 const bool is_input,
-                                 const bool ignore_clip_distances_type_validation) const {
+                                 const bool is_input) const {
     auto* type = storage_ty->UnwrapRef();
     bool is_stage_mismatch = false;
     bool is_output = !is_input;
@@ -1103,8 +1098,7 @@ bool Validator::BuiltinAttribute(const ast::BuiltinAttribute* attr,
                 return false;
             }
             auto* arr = type->As<sem::Array>();
-            if (!ignore_clip_distances_type_validation &&
-                !((arr != nullptr) && arr->ElemType()->Is<core::type::F32>() &&
+            if (!((arr != nullptr) && arr->ElemType()->Is<core::type::F32>() &&
                   arr->ConstantCount().has_value() &&
                   *arr->ConstantCount() <= kMaxClipDistancesSize)) {
                 AddError(attr->source)
@@ -1294,8 +1288,6 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
         const ast::BlendSrcAttribute* blend_src_attribute = nullptr;
         const ast::InterpolateAttribute* interpolate_attribute = nullptr;
         const ast::InvariantAttribute* invariant_attribute = nullptr;
-        bool ignore_clip_distances_type =
-            IsValidationDisabled(attrs, ast::DisabledValidation::kIgnoreClipDistancesType);
         for (auto* attr : attrs) {
             bool ok = Switch(
                 attr,  //
@@ -1320,9 +1312,9 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
                         return false;
                     }
 
-                    if (!BuiltinAttribute(builtin_attr, ty, stage,
-                                          /* is_input */ param_or_ret == ParamOrRetType::kParameter,
-                                          ignore_clip_distances_type)) {
+                    if (!BuiltinAttribute(
+                            builtin_attr, ty, stage,
+                            /* is_input */ param_or_ret == ParamOrRetType::kParameter)) {
                         return false;
                     }
                     builtins.Add(builtin);
@@ -1556,12 +1548,8 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
         if (!bp) {
             continue;
         }
-        if (auto added = binding_points.Add(*bp, var_decl);
-            !added &&
-            IsValidationEnabled(decl->attributes,
-                                ast::DisabledValidation::kBindingPointCollision) &&
-            IsValidationEnabled(added.value->attributes,
-                                ast::DisabledValidation::kBindingPointCollision)) {
+        auto added = binding_points.Add(*bp, var_decl);
+        if (!added) {
             // https://gpuweb.github.io/gpuweb/wgsl/#resource-interface
             // Bindings must not alias within a shader stage: two different variables in the
             // resource interface of a given shader must not have the same group and binding values,
@@ -2555,8 +2543,6 @@ bool Validator::Structure(const sem::Struct* str, ast::PipelineStage stage) cons
         const ast::ColorAttribute* color_attribute = nullptr;
         const ast::InvariantAttribute* invariant_attribute = nullptr;
         const ast::InterpolateAttribute* interpolate_attribute = nullptr;
-        bool ignore_clip_distances_type = IsValidationDisabled(
-            member->Declaration()->attributes, ast::DisabledValidation::kIgnoreClipDistancesType);
         for (auto* attr : member->Declaration()->attributes) {
             bool ok = Switch(
                 attr,  //
@@ -2581,7 +2567,7 @@ bool Validator::Structure(const sem::Struct* str, ast::PipelineStage stage) cons
                 },
                 [&](const ast::BuiltinAttribute* builtin_attr) {
                     if (!BuiltinAttribute(builtin_attr, member->Type(), stage,
-                                          /* is_input */ false, ignore_clip_distances_type)) {
+                                          /* is_input */ false)) {
                         return false;
                     }
                     if (builtin_attr->builtin == core::BuiltinValue::kPosition) {

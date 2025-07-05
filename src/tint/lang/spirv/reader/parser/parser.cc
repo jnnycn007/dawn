@@ -346,6 +346,45 @@ class Parser {
                     }
 
                     switch (static_cast<spv::Op>(op)) {
+                        case spv::Op::OpBitwiseAnd:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kBitwiseAnd, 3);
+                            break;
+                        case spv::Op::OpBitwiseOr:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kBitwiseOr, 3);
+                            break;
+                        case spv::Op::OpBitwiseXor:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kBitwiseXor, 3);
+                            break;
+                        case spv::Op::OpIEqual:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kEqual, 3);
+                            break;
+                        case spv::Op::OpINotEqual:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kNotEqual, 3);
+                            break;
+                        case spv::Op::OpSGreaterThan:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kSGreaterThan, 3);
+                            break;
+                        case spv::Op::OpSGreaterThanEqual:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kSGreaterThanEqual, 3);
+                            break;
+                        case spv::Op::OpSLessThan:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kSLessThan, 3);
+                            break;
+                        case spv::Op::OpSLessThanEqual:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kSLessThanEqual, 3);
+                            break;
+                        case spv::Op::OpUGreaterThan:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kUGreaterThan, 3);
+                            break;
+                        case spv::Op::OpUGreaterThanEqual:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kUGreaterThanEqual, 3);
+                            break;
+                        case spv::Op::OpULessThan:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kULessThan, 3);
+                            break;
+                        case spv::Op::OpULessThanEqual:
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kULessThanEqual, 3);
+                            break;
                         case spv::Op::OpLogicalAnd:
                             EmitBinary(inst, core::BinaryOp::kAnd, 3);
                             break;
@@ -363,6 +402,75 @@ class Parser {
                             break;
                         case spv::Op::OpNot:
                             EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kNot, 3);
+                            break;
+                        case spv::Op::OpSConvert:
+                            TINT_ICE() << "can't translate SConvert: WGSL does not have concrete "
+                                          "integer types of different widths";
+                        case spv::Op::OpUConvert:
+                            TINT_ICE() << "can't translate UConvert: WGSL does not have concrete "
+                                          "integer types of different widths";
+                        case spv::Op::OpFConvert:
+                            Emit(b_.Convert(Type(inst.type_id()),
+                                            Value(inst.GetSingleWordInOperand(1))),
+                                 inst.result_id());
+                            break;
+                        case spv::Op::OpSNegate:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kSNegate, 3);
+                            break;
+                        case spv::Op::OpIAdd:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kAdd, 3);
+                            break;
+                        case spv::Op::OpISub:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kSub, 3);
+                            break;
+                        case spv::Op::OpIMul:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kMul, 3);
+                            break;
+                        case spv::Op::OpSDiv:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kSDiv, 3);
+                            break;
+                        case spv::Op::OpUDiv:
+                            EmitBinary(inst, core::BinaryOp::kDivide, 3);
+                            break;
+                        case spv::Op::OpUMod:
+                            EmitBinary(inst, core::BinaryOp::kModulo, 3);
+                            break;
+                        case spv::Op::OpSMod:
+                        case spv::Op::OpSRem:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kSMod, 3);
+                            break;
+                        case spv::Op::OpShiftLeftLogical:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kShiftLeftLogical,
+                                                         3);
+                            break;
+                        case spv::Op::OpShiftRightLogical:
+                            EmitSpirvExplicitBuiltinCall(inst, spirv::BuiltinFn::kShiftRightLogical,
+                                                         3);
+                            break;
+                        case spv::Op::OpShiftRightArithmetic:
+                            EmitSpirvExplicitBuiltinCall(
+                                inst, spirv::BuiltinFn::kShiftRightArithmetic, 3);
+                            break;
+                        case spv::Op::OpCompositeExtract:
+                            EmitCompositeExtract(inst, 3);
+                            break;
+                        case spv::Op::OpCompositeInsert:
+                            TINT_ICE() << "can't translate OpSpecConstantOp with CompositeInsert: "
+                                          "OpSpecConstantOp maps to a WGSL override declaration, "
+                                          "but WGSL overrides must have scalar type";
+                        case spv::Op::OpVectorShuffle:
+                            TINT_ICE() << "can't translate OpSpecConstantOp with VectorShuffle: "
+                                          "OpSpecConstantOp maps to a WGSL override declaration, "
+                                          "but WGSL overrides must have scalar type";
+                        case spv::Op::OpSelect:
+                            if (!Type(inst.type_id())->IsScalar()) {
+                                TINT_ICE()
+                                    << "can't translate OpSpecConstantOp with Select that returns "
+                                       "a vector: "
+                                       "OpSpecConstantOp maps to a WGSL override declaration, "
+                                       "but WGSL overrides must have scalar type";
+                            }
+                            EmitSpirvBuiltinCall(inst, spirv::BuiltinFn::kSelect, 3);
                             break;
                         default:
                             TINT_ICE() << "Unknown spec constant operation: " << op;
@@ -607,7 +715,16 @@ class Parser {
                 }
                 case spvtools::opt::analysis::Type::kRuntimeArray: {
                     auto* arr_ty = type->AsRuntimeArray();
-                    return ty_.runtime_array(Type(arr_ty->element_type()));
+
+                    auto* elem_ty = Type(arr_ty->element_type());
+                    uint32_t implicit_stride = tint::RoundUp(elem_ty->Align(), elem_ty->Size());
+                    if (array_stride == 0 || array_stride == implicit_stride) {
+                        return ty_.runtime_array(elem_ty);
+                    }
+
+                    return ty_.Get<spirv::type::ExplicitLayoutArray>(
+                        elem_ty, ty_.Get<core::type::RuntimeArrayCount>(), elem_ty->Align(),
+                        static_cast<uint32_t>(array_stride), array_stride);
                 }
                 case spvtools::opt::analysis::Type::kStruct: {
                     const core::type::Struct* str_ty = EmitStruct(type->AsStruct());
@@ -752,6 +869,27 @@ class Parser {
             elem_ty->Align(), static_cast<uint32_t>(array_stride * count_val), array_stride);
     }
 
+    /// Calculate the size of a struct member type that has a matrix stride decoration.
+    uint32_t GetSizeOfTypeWithMatrixStride(const core::type::Type* type,
+                                           uint32_t stride,
+                                           bool is_row_major) {
+        return tint::Switch(
+            type,
+            [&](const core::type::Matrix* mat) {
+                return stride * (is_row_major ? mat->Rows() : mat->Columns());
+            },
+            [&](const core::type::Array* arr) {
+                auto size = GetSizeOfTypeWithMatrixStride(arr->ElemType(), stride, is_row_major);
+                // The size of a runtime-sized array is the size of a single element, so we only
+                // have to handle the fixed-sized array case here.
+                if (auto count = arr->ConstantCount()) {
+                    size *= count.value();
+                }
+                return size;
+            },
+            TINT_ICE_ON_NO_MATCH);
+    }
+
     /// @param struct_ty a SPIR-V struct object
     /// @returns a Tint struct object
     const core::type::Struct* EmitStruct(const spvtools::opt::analysis::Struct* struct_ty) {
@@ -845,8 +983,13 @@ class Parser {
                 name = ir_.symbols.New();
             }
 
+            uint32_t size = member_ty->Size();
+            if (matrix_stride > 0) {
+                size = GetSizeOfTypeWithMatrixStride(member_ty, matrix_stride, is_row_major);
+            }
+
             core::type::StructMember* member = ty_.Get<core::type::StructMember>(
-                name, member_ty, i, offset, align, member_ty->Size(), std::move(attributes));
+                name, member_ty, i, offset, align, size, std::move(attributes));
             if (is_row_major) {
                 member->SetRowMajor();
             }
@@ -856,7 +999,7 @@ class Parser {
 
             members.Push(member);
 
-            current_size = offset + member_ty->Size();
+            current_size = offset + size;
         }
 
         Symbol name = GetUniqueSymbolFor(struct_id);
@@ -2904,8 +3047,11 @@ class Parser {
              inst.result_id());
     }
 
-    void EmitSpirvBuiltinCall(const spvtools::opt::Instruction& inst, spirv::BuiltinFn fn) {
-        Emit(b_.Call<spirv::ir::BuiltinCall>(Type(inst.type_id()), fn, Args(inst, 2)),
+    void EmitSpirvBuiltinCall(const spvtools::opt::Instruction& inst,
+                              spirv::BuiltinFn fn,
+                              uint32_t first_operand_idx = 2) {
+        Emit(b_.Call<spirv::ir::BuiltinCall>(Type(inst.type_id()), fn,
+                                             Args(inst, first_operand_idx)),
              inst.result_id());
     }
 
@@ -3272,6 +3418,7 @@ class Parser {
         Emit(binary, inst.result_id());
     }
 
+    /// Emits the logical negation of the result of the given SPIR-V instruction.
     /// @param inst the SPIR-V instruction
     /// @param op the binary operator to use
     void EmitInvertedBinary(const spvtools::opt::Instruction& inst, core::BinaryOp op) {
@@ -3285,12 +3432,13 @@ class Parser {
     }
 
     /// @param inst the SPIR-V instruction for OpCompositeExtract
-    void EmitCompositeExtract(const spvtools::opt::Instruction& inst) {
+    void EmitCompositeExtract(const spvtools::opt::Instruction& inst,
+                              uint32_t composite_index = 2) {
         Vector<core::ir::Value*, 4> indices;
-        for (uint32_t i = 3; i < inst.NumOperandWords(); i++) {
+        for (uint32_t i = composite_index + 1; i < inst.NumOperandWords(); i++) {
             indices.Push(b_.Constant(u32(inst.GetSingleWordOperand(i))));
         }
-        auto* object = Value(inst.GetSingleWordOperand(2));
+        auto* object = Value(inst.GetSingleWordOperand(composite_index));
         auto* access = b_.Access(Type(inst.type_id()), object, std::move(indices));
         Emit(access, inst.result_id());
     }

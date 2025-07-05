@@ -780,15 +780,10 @@ MaybeError ValidateRenderPassPLS(DeviceBase* device,
                            {attachments.data(), attachments.size()});
 }
 
-ResultOrError<UnpackedPtr<RenderPassDescriptor>> ValidateRenderPassDescriptor(
-    DeviceBase* device,
-    const RenderPassDescriptor* rawDescriptor,
-    UsageValidationMode usageValidationMode,
-    RenderPassValidationState* validationState) {
-    UnpackedPtr<RenderPassDescriptor> descriptor;
-    DAWN_TRY_ASSIGN_CONTEXT(descriptor, ValidateAndUnpack(rawDescriptor),
-                            "validating chained structs.");
-
+MaybeError ValidateRenderPassDescriptor(DeviceBase* device,
+                                        UnpackedPtr<RenderPassDescriptor> descriptor,
+                                        UsageValidationMode usageValidationMode,
+                                        RenderPassValidationState* validationState) {
     uint32_t maxColorAttachments = device->GetLimits().v1.maxColorAttachments;
     DAWN_INVALID_IF(
         descriptor->colorAttachmentCount > maxColorAttachments,
@@ -882,7 +877,39 @@ ResultOrError<UnpackedPtr<RenderPassDescriptor>> ValidateRenderPassDescriptor(
                         ToAPI(Feature::DawnPartialLoadResolveTexture));
     }
 
-    return descriptor;
+    return {};
+}
+
+// Adds a single attachment to the validation state to ensure that it is valid and can report a
+// render width and height.
+MaybeError InitializeValidationStateAttachment(UnpackedPtr<RenderPassDescriptor> descriptor,
+                                               RenderPassValidationState* validationState) {
+    if (descriptor->depthStencilAttachment != nullptr) {
+        DAWN_TRY(validationState->AddAttachment(descriptor->depthStencilAttachment->view,
+                                                AttachmentType::DepthStencilAttachment));
+    } else {
+        for (size_t i = 0; i < descriptor->colorAttachmentCount; ++i) {
+            const RenderPassColorAttachment& colorAttachment = descriptor->colorAttachments[i];
+            if (colorAttachment.view != nullptr) {
+                DAWN_TRY(validationState->AddAttachment(colorAttachment.view,
+                                                        AttachmentType::ColorAttachment,
+                                                        colorAttachment.depthSlice));
+                break;
+            }
+        }
+    }
+
+    if (!validationState->HasAttachment()) {
+        // It's also possible that pixel local storage contains the only attachments.
+        auto pls = descriptor.Get<RenderPassPixelLocalStorage>();
+        if (pls != nullptr && pls->storageAttachmentCount > 0) {
+            const RenderPassStorageAttachment& attachment = pls->storageAttachments[0];
+            DAWN_TRY(validationState->AddAttachment(attachment.storage,
+                                                    AttachmentType::StorageAttachment));
+        }
+    }
+
+    return {};
 }
 
 MaybeError ValidateComputePassDescriptor(const DeviceBase* device,
@@ -1185,7 +1212,7 @@ std::vector<IndirectDrawMetadata> CommandEncoder::AcquireIndirectDrawMetadata() 
 
 ComputePassEncoder* CommandEncoder::APIBeginComputePass(const ComputePassDescriptor* descriptor) {
     // This function will create new object, need to lock the Device.
-    auto deviceLock(GetDevice()->GetScopedLock());
+    auto deviceGuard = GetDevice()->GetGuard();
 
     return ReturnToAPI(BeginComputePass(descriptor));
 }
@@ -1197,7 +1224,9 @@ Ref<ComputePassEncoder> CommandEncoder::BeginComputePass(const ComputePassDescri
     bool success = mEncodingContext.TryEncode(
         this,
         [&](CommandAllocator* allocator) -> MaybeError {
-            DAWN_TRY(ValidateComputePassDescriptor(device, descriptor));
+            if (GetDevice()->IsValidationEnabled()) {
+                DAWN_TRY(ValidateComputePassDescriptor(device, descriptor));
+            }
 
             BeginComputePassCmd* cmd =
                 allocator->Allocate<BeginComputePassCmd>(Command::BeginComputePass);
@@ -1248,7 +1277,7 @@ Ref<ComputePassEncoder> CommandEncoder::BeginComputePass(const ComputePassDescri
 
 RenderPassEncoder* CommandEncoder::APIBeginRenderPass(const RenderPassDescriptor* descriptor) {
     // This function will create new object, need to lock the Device.
-    auto deviceLock(GetDevice()->GetScopedLock());
+    auto deviceGuard = GetDevice()->GetGuard();
 
     return ReturnToAPI(BeginRenderPass(descriptor));
 }
@@ -1281,9 +1310,17 @@ Ref<RenderPassEncoder> CommandEncoder::BeginRenderPass(const RenderPassDescripto
     bool success = mEncodingContext.TryEncode(
         this,
         [&](CommandAllocator* allocator) -> MaybeError {
-            DAWN_TRY_ASSIGN(descriptor,
-                            ValidateRenderPassDescriptor(device, rawDescriptor,
-                                                         mUsageValidationMode, &validationState));
+            DAWN_TRY_ASSIGN_CONTEXT(descriptor, ValidateAndUnpack(rawDescriptor),
+                                    "validating and unpacking chained structs.");
+
+            if (GetDevice()->IsValidationEnabled()) {
+                DAWN_TRY(ValidateRenderPassDescriptor(device, descriptor, mUsageValidationMode,
+                                                      &validationState));
+            } else {
+                // If validation is skipped at least one attachment still needs to be added to the
+                // validation state to compute the render width and height from.
+                DAWN_TRY(InitializeValidationStateAttachment(descriptor, &validationState));
+            }
 
             DAWN_ASSERT(validationState.IsValidState());
 
@@ -1651,7 +1688,7 @@ void CommandEncoder::APICopyBufferToTexture(const TexelCopyBufferInfo* source,
                 // The below function might create new resources. Need to lock the Device.
                 // TODO(crbug.com/dawn/1618): In future, all temp resources should be created at
                 // Command Submit time, so the locking would be removed from here at that point.
-                auto deviceLock(GetDevice()->GetScopedLock());
+                auto deviceGuard = GetDevice()->GetGuard();
 
                 DAWN_TRY_CONTEXT(
                     BlitBufferToDepth(GetDevice(), this, source->buffer, srcLayout, dst, *copySize),
@@ -1663,7 +1700,7 @@ void CommandEncoder::APICopyBufferToTexture(const TexelCopyBufferInfo* source,
                 // The below function might create new resources. Need to lock the Device.
                 // TODO(crbug.com/dawn/1618): In future, all temp resources should be created at
                 // Command Submit time, so the locking would be removed from here at that point.
-                auto deviceLock(GetDevice()->GetScopedLock());
+                auto deviceGuard = GetDevice()->GetGuard();
 
                 DAWN_TRY_CONTEXT(BlitBufferToStencil(GetDevice(), this, source->buffer, srcLayout,
                                                      dst, *copySize),
@@ -1675,7 +1712,7 @@ void CommandEncoder::APICopyBufferToTexture(const TexelCopyBufferInfo* source,
                 // This function might create new resources. Need to lock the Device.
                 // TODO(crbug.com/dawn/1618): In future, all temp resources should be created at
                 // Command Submit time, so the locking would be removed from here at that point.
-                auto deviceLock(GetDevice()->GetScopedLock());
+                auto deviceGuard = GetDevice()->GetGuard();
                 DAWN_TRY_CONTEXT(BlitBufferToTexture(GetDevice(), this, source->buffer, srcLayout,
                                                      dst, *copySize),
                                  "copying buffer %s to %s using blit workaround.", source->buffer,
@@ -1754,7 +1791,7 @@ void CommandEncoder::APICopyTextureToBuffer(const TexelCopyTextureInfo* sourceOr
                 // This function might create new resources. Need to lock the Device.
                 // TODO(crbug.com/dawn/1618): In future, all temp resources should be created at
                 // Command Submit time, so the locking would be removed from here at that point.
-                auto deviceLock(GetDevice()->GetScopedLock());
+                auto deviceGuard = GetDevice()->GetGuard();
 
                 TextureCopy src;
                 src.texture = source.texture;
@@ -1906,7 +1943,7 @@ void CommandEncoder::APICopyTextureToTexture(const TexelCopyTextureInfo* sourceO
                 // This function might create new resources. Need to lock the Device.
                 // TODO(crbug.com/dawn/1618): In future, all temp resources should be created at
                 // Command Submit time, so the locking would be removed from here at that point.
-                auto deviceLock(GetDevice()->GetScopedLock());
+                auto deviceGuard = GetDevice()->GetGuard();
 
                 DAWN_TRY_CONTEXT(BlitDepthToDepth(GetDevice(), this, src, dst, *copySize),
                                  "copying depth aspect from %s to %s using blit workaround.",
@@ -2064,7 +2101,7 @@ void CommandEncoder::APIResolveQuerySet(QuerySetBase* querySet,
                 // The below function might create new resources. Need to lock the Device.
                 // TODO(crbug.com/dawn/1618): In future, all temp resources should be created at
                 // Command Submit time, so the locking would be removed from here at that point.
-                auto deviceLock(GetDevice()->GetScopedLock());
+                auto deviceGuard = GetDevice()->GetGuard();
 
                 DAWN_TRY(EncodeTimestampsToNanosecondsConversion(
                     this, querySet, firstQuery, queryCount, destination, destinationOffset));
@@ -2127,7 +2164,7 @@ void CommandEncoder::APIWriteTimestamp(QuerySetBase* querySet, uint32_t queryInd
 
 CommandBufferBase* CommandEncoder::APIFinish(const CommandBufferDescriptor* descriptor) {
     // This function will create new object, need to lock the Device.
-    auto deviceLock(GetDevice()->GetScopedLock());
+    auto deviceGuard = GetDevice()->GetGuard();
 
     Ref<CommandBufferBase> commandBuffer;
     if (GetDevice()->ConsumedError(Finish(descriptor), &commandBuffer, "finishing %s.", this)) {

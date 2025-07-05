@@ -34,10 +34,8 @@
 #include "spirv/unified1/GLSL.std.450.h"
 #include "spirv/unified1/spirv.h"
 
-#include "src/tint/lang/core/access.h"
-#include "src/tint/lang/core/address_space.h"
-#include "src/tint/lang/core/builtin_value.h"
 #include "src/tint/lang/core/constant/value.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/access.h"
 #include "src/tint/lang/core/ir/bitcast.h"
@@ -73,7 +71,6 @@
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/core/ir/var.h"
-#include "src/tint/lang/core/texel_format.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/atomic.h"
 #include "src/tint/lang/core/type/binding_array.h"
@@ -218,10 +215,24 @@ class Printer {
             return res.Failure();
         }
 
+        uint32_t version = 0u;
+        switch (options_.spirv_version) {
+            case SpvVersion::kSpv13:
+                version = 0x10300u;
+                break;
+            case SpvVersion::kSpv14:
+                version = 0x10400u;
+                break;
+            case SpvVersion::kSpv15:
+                version = 0x10500u;
+                break;
+            default:
+                TINT_ICE() << "unsupported SPIR-V version";
+        }
+
         // Serialize the module into binary SPIR-V.
         BinaryWriter writer;
-        writer.WriteHeader(module_.IdBound(), kWriterVersion,
-                           static_cast<uint32_t>(options_.spirv_version));
+        writer.WriteHeader(module_.IdBound(), kWriterVersion, version);
         writer.WriteModule(module_);
 
         output_.spirv = std::move(writer.Result());

@@ -31,8 +31,8 @@
 #include <tuple>
 #include <utility>
 
-#include "src/tint/lang/core/builtin_type.h"
 #include "src/tint/lang/core/constant/splat.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/access.h"
 #include "src/tint/lang/core/ir/binary.h"
@@ -70,7 +70,6 @@
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/core/ir/var.h"
-#include "src/tint/lang/core/texel_format.h"
 #include "src/tint/lang/core/type/atomic.h"
 #include "src/tint/lang/core/type/depth_multisampled_texture.h"
 #include "src/tint/lang/core/type/depth_texture.h"
@@ -192,6 +191,11 @@ class State {
                 [&](const core::ir::Var* var) { Var(var); },                        //
                 [&](const core::ir::Override* override_) { Override(override_); },  //
                 [&](const core::ir::Binary* binary) { Binary(binary); },            //
+                [&](const core::ir::Unary* unary) { Unary(unary); },                //
+                [&](const core::ir::Bitcast* c) {
+                    auto ty = Type(c->Result()->Type());
+                    Bind(c->Result(), b.Bitcast(ty, Expr(c->Args()[0])));
+                },
                 TINT_ICE_ON_NO_MATCH);
         }
     }
@@ -1077,15 +1081,46 @@ class State {
         }
 
         auto n = structs_.GetOrAdd(s, [&] {
-            auto members = tint::Transform<8>(s->Members(), [&](const core::type::StructMember* m) {
+            TINT_ASSERT(s->Members().Length() > 0);
+            uint32_t current_offset = s->Members()[0]->Offset();
+
+            Vector<const ast::StructMember*, 8> members;
+
+            // Add padding before the first member if necessary.
+            if (current_offset > 0) {
+                TINT_ASSERT(current_offset % 4 == 0);
+                for (uint32_t i = 0; i < current_offset; i += 4) {
+                    members.Push(b.Member("tint_pad_" + std::to_string(i), b.ty.u32()));
+                }
+            }
+
+            for (const auto* m : s->Members()) {
                 auto ty = Type(m->Type());
                 const auto& ir_attrs = m->Attributes();
                 Vector<const ast::Attribute*, 4> ast_attrs;
+
+                TINT_ASSERT(current_offset == m->Offset());
+
+                // If the next member requires an offset that is not automatically satisfied by
+                // its required alignment, we will need to increase the size of this member.
+                uint32_t size = m->Size();
+                if (m->Index() < s->Members().Length() - 1) {
+                    auto* next_member = s->Members()[m->Index() + 1];
+                    auto next_offset = tint::RoundUp(next_member->Align(), current_offset + size);
+                    auto next_member_required_offset = next_member->Offset();
+                    if (next_offset < next_member_required_offset) {
+                        uint32_t new_size = next_member_required_offset - current_offset;
+                        TINT_ASSERT(new_size > size);
+                        size = new_size;
+                    }
+                    current_offset = next_member_required_offset;
+                }
+
                 if (m->Type()->Align() != m->Align()) {
                     ast_attrs.Push(b.MemberAlign(u32(m->Align())));
                 }
-                if (m->Type()->Size() != m->Size()) {
-                    ast_attrs.Push(b.MemberSize(u32(m->Size())));
+                if (m->Type()->Size() != size) {
+                    ast_attrs.Push(b.MemberSize(u32(size)));
                 }
                 if (auto location = ir_attrs.location) {
                     ast_attrs.Push(b.Location(u32(*location)));
@@ -1112,8 +1147,8 @@ class State {
                 if (ir_attrs.invariant) {
                     ast_attrs.Push(b.Invariant());
                 }
-                return b.Member(m->Name().NameView(), ty, std::move(ast_attrs));
-            });
+                members.Push(b.Member(m->Name().NameView(), ty, std::move(ast_attrs)));
+            }
 
             // TODO(crbug.com/tint/1902): Emit structure attributes
             Vector<const ast::Attribute*, 2> attrs;
@@ -1185,6 +1220,15 @@ class State {
     }
 
     bool IsWGSLSafe(std::string_view name) {
+        // Make sure the name starts with an alphabetic character and then only contains
+        // alphanumeric characters or underscores after that.
+        if (name.empty() || !std::isalpha(static_cast<unsigned char>(name[0])) ||
+            !std::all_of(name.begin(), name.end(),
+                         [](unsigned char c) {  //
+                             return std::isalnum(c) || c == '_';
+                         })) {
+            return false;
+        }
         return !IsReserved(name) && !IsKeyword(name) && !IsEnumName(name) && !IsTypeName(name);
     }
 
