@@ -50,6 +50,7 @@
 #include "dawn/native/vulkan/CommandBufferVk.h"
 #include "dawn/native/vulkan/ComputePipelineVk.h"
 #include "dawn/native/vulkan/FencedDeleter.h"
+#include "dawn/native/vulkan/FramebufferCache.h"
 #include "dawn/native/vulkan/PhysicalDeviceVk.h"
 #include "dawn/native/vulkan/PipelineCacheVk.h"
 #include "dawn/native/vulkan/PipelineLayoutVk.h"
@@ -115,8 +116,6 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
     VulkanFunctions* functions = GetMutableFunctions();
     *functions = ToBackend(GetPhysicalDevice())->GetVulkanInstance()->GetFunctions();
 
-    mSupportsMappableStorageBuffer = SupportsBufferMapExtendedUsages(mDeviceInfo);
-
     // Two things are crucial if device initialization fails: the function pointers to destroy
     // objects, and the fence deleter that calls these functions. Do not do anything before
     // these two are set up, so that a failed initialization doesn't cause a crash in
@@ -141,6 +140,7 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
         functions->CmdDrawIndexedIndirect = NoopDrawFunction<PFN_vkCmdDrawIndexedIndirect>::Fun;
     }
 
+    mFramebufferCache = std::make_unique<FramebufferCache>(this);
     mRenderPassCache = std::make_unique<RenderPassCache>(this);
 
     VkDeviceSize heapBlockSize =
@@ -388,6 +388,10 @@ MutexProtected<FencedDeleter>& Device::GetFencedDeleter() const {
     return *mDeleter;
 }
 
+FramebufferCache* Device::GetFramebufferCache() const {
+    return mFramebufferCache.get();
+}
+
 RenderPassCache* Device::GetRenderPassCache() const {
     return mRenderPassCache.get();
 }
@@ -512,6 +516,7 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         usedKnobs.features.depthClamp = VK_TRUE;
     }
 
+    bool shaderFloat16Int8FeaturesAdded = false;
     if (HasFeature(Feature::ShaderF16)) {
         DAWN_ASSERT(usedKnobs.HasExt(DeviceExt::ShaderFloat16Int8) &&
                     mDeviceInfo.shaderFloat16Int8Features.shaderFloat16 == VK_TRUE &&
@@ -526,6 +531,7 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         if (mDeviceInfo._16BitStorageFeatures.storageInputOutput16 == VK_TRUE) {
             usedKnobs._16BitStorageFeatures.storageInputOutput16 = VK_TRUE;
         }
+        shaderFloat16Int8FeaturesAdded = true;
 
         featuresChain.Add(&usedKnobs.shaderFloat16Int8Features,
                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR);
@@ -580,6 +586,16 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         DAWN_ASSERT(usedKnobs.HasExt(DeviceExt::CooperativeMatrix));
         usedKnobs.cooperativeMatrixFeatures = mDeviceInfo.cooperativeMatrixFeatures;
         featuresChain.Add(&usedKnobs.cooperativeMatrixFeatures);
+
+        // Using int8 and uint8 cooperative matrices requires `shaderInt8`.
+        if (mDeviceInfo.shaderFloat16Int8Features.shaderInt8 == VK_TRUE) {
+            usedKnobs.shaderFloat16Int8Features.shaderInt8 = VK_TRUE;
+            if (!shaderFloat16Int8FeaturesAdded) {
+                featuresChain.Add(
+                    &usedKnobs.shaderFloat16Int8Features,
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR);
+            }
+        }
     }
 
     // Find a universal queue family
@@ -944,8 +960,9 @@ void Device::DestroyImpl() {
     // Allow recycled memory to be deleted.
     GetResourceMemoryAllocator()->FreeRecycledMemory();
 
-    // The VkRenderPasses in the cache can be destroyed immediately since all commands referring
-    // to them are guaranteed to be finished executing.
+    // The VkFramebuffers and VkRenderPasses in the cache can be destroyed immediately since all
+    // commands referring to them are guaranteed to be finished executing.
+    mFramebufferCache = nullptr;
     mRenderPassCache = nullptr;
 
     // Destroy the VkPipelineCache before VkDevice.
@@ -1048,6 +1065,8 @@ void Device::SetLabelImpl() {
 bool Device::ReduceMemoryUsageImpl() {
     GetResourceMemoryAllocator()->FreeRecycledMemory();
 
+    GetFramebufferCache()->Clear();
+
     auto GetLastPendingDeletionSerial = [this]() {
         // Only hold the lock for one of these objects at a time to avoid lock-order-inversion.
         auto deleterSerial = GetFencedDeleter()->GetLastPendingDeletionSerial();
@@ -1099,7 +1118,7 @@ bool Device::CanAddStorageUsageToBufferWithoutSideEffects(wgpu::BufferUsage stor
     DAWN_ASSERT(IsSubset(storageUsage, wgpu::BufferUsage::Storage | kInternalStorageBuffer |
                                            kReadOnlyStorageBuffer));
     if (originalUsage & kMappableBufferUsages) {
-        return mSupportsMappableStorageBuffer;
+        return HasFeature(Feature::BufferMapExtendedUsages);
     }
     return true;
 }

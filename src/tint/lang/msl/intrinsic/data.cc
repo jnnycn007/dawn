@@ -968,20 +968,33 @@ constexpr NumberMatcher kF32TexelFormatMatcher {
 /* match */ [](MatchState&, Number number) -> Number {
     switch (static_cast<core::TexelFormat>(number.Value())) {
       case core::TexelFormat::kR8Unorm:
+      case core::TexelFormat::kR8Snorm:
+      case core::TexelFormat::kRg8Unorm:
+      case core::TexelFormat::kRg8Snorm:
       case core::TexelFormat::kBgra8Unorm:
       case core::TexelFormat::kRgba8Unorm:
       case core::TexelFormat::kRgba8Snorm:
+      case core::TexelFormat::kR16Unorm:
+      case core::TexelFormat::kR16Snorm:
+      case core::TexelFormat::kRg16Unorm:
+      case core::TexelFormat::kRg16Snorm:
+      case core::TexelFormat::kRgba16Unorm:
+      case core::TexelFormat::kRgba16Snorm:
+      case core::TexelFormat::kR16Float:
+      case core::TexelFormat::kRg16Float:
       case core::TexelFormat::kRgba16Float:
       case core::TexelFormat::kR32Float:
       case core::TexelFormat::kRg32Float:
       case core::TexelFormat::kRgba32Float:
+      case core::TexelFormat::kRgb10A2Unorm:
+      case core::TexelFormat::kRg11B10Ufloat:
         return number;
       default:
         return Number::invalid;
     }
   },
 /* print */ [](MatchState*, StyledText& out) {
-  out<< style::Enum("r8unorm")<< style::Plain(", ") << style::Enum("bgra8unorm")<< style::Plain(", ") << style::Enum("rgba8unorm")<< style::Plain(", ") << style::Enum("rgba8snorm")<< style::Plain(", ") << style::Enum("rgba16float")<< style::Plain(", ") << style::Enum("r32float")<< style::Plain(", ") << style::Enum("rg32float")<< style::Plain(" or ") << style::Enum("rgba32float");
+  out<< style::Enum("r8unorm")<< style::Plain(", ") << style::Enum("r8snorm")<< style::Plain(", ") << style::Enum("rg8unorm")<< style::Plain(", ") << style::Enum("rg8snorm")<< style::Plain(", ") << style::Enum("bgra8unorm")<< style::Plain(", ") << style::Enum("rgba8unorm")<< style::Plain(", ") << style::Enum("rgba8snorm")<< style::Plain(", ") << style::Enum("r16unorm")<< style::Plain(", ") << style::Enum("r16snorm")<< style::Plain(", ") << style::Enum("rg16unorm")<< style::Plain(", ") << style::Enum("rg16snorm")<< style::Plain(", ") << style::Enum("rgba16unorm")<< style::Plain(", ") << style::Enum("rgba16snorm")<< style::Plain(", ") << style::Enum("r16float")<< style::Plain(", ") << style::Enum("rg16float")<< style::Plain(", ") << style::Enum("rgba16float")<< style::Plain(", ") << style::Enum("r32float")<< style::Plain(", ") << style::Enum("rg32float")<< style::Plain(", ") << style::Enum("rgba32float")<< style::Plain(", ") << style::Enum("rgb10a2unorm")<< style::Plain(" or ") << style::Enum("rg11b10ufloat");
   }
 };
 
@@ -989,7 +1002,11 @@ constexpr NumberMatcher kF32TexelFormatMatcher {
 constexpr NumberMatcher kI32TexelFormatMatcher {
 /* match */ [](MatchState&, Number number) -> Number {
     switch (static_cast<core::TexelFormat>(number.Value())) {
+      case core::TexelFormat::kR8Sint:
+      case core::TexelFormat::kRg8Sint:
       case core::TexelFormat::kRgba8Sint:
+      case core::TexelFormat::kR16Sint:
+      case core::TexelFormat::kRg16Sint:
       case core::TexelFormat::kRgba16Sint:
       case core::TexelFormat::kR32Sint:
       case core::TexelFormat::kRg32Sint:
@@ -1000,7 +1017,7 @@ constexpr NumberMatcher kI32TexelFormatMatcher {
     }
   },
 /* print */ [](MatchState*, StyledText& out) {
-  out<< style::Enum("rgba8sint")<< style::Plain(", ") << style::Enum("rgba16sint")<< style::Plain(", ") << style::Enum("r32sint")<< style::Plain(", ") << style::Enum("rg32sint")<< style::Plain(" or ") << style::Enum("rgba32sint");
+  out<< style::Enum("r8sint")<< style::Plain(", ") << style::Enum("rg8sint")<< style::Plain(", ") << style::Enum("rgba8sint")<< style::Plain(", ") << style::Enum("r16sint")<< style::Plain(", ") << style::Enum("rg16sint")<< style::Plain(", ") << style::Enum("rgba16sint")<< style::Plain(", ") << style::Enum("r32sint")<< style::Plain(", ") << style::Enum("rg32sint")<< style::Plain(" or ") << style::Enum("rgba32sint");
   }
 };
 
@@ -1008,18 +1025,23 @@ constexpr NumberMatcher kI32TexelFormatMatcher {
 constexpr NumberMatcher kU32TexelFormatMatcher {
 /* match */ [](MatchState&, Number number) -> Number {
     switch (static_cast<core::TexelFormat>(number.Value())) {
+      case core::TexelFormat::kR8Uint:
+      case core::TexelFormat::kRg8Uint:
+      case core::TexelFormat::kR16Uint:
+      case core::TexelFormat::kRg16Uint:
       case core::TexelFormat::kRgba8Uint:
       case core::TexelFormat::kRgba16Uint:
       case core::TexelFormat::kR32Uint:
       case core::TexelFormat::kRg32Uint:
       case core::TexelFormat::kRgba32Uint:
+      case core::TexelFormat::kRgb10A2Uint:
         return number;
       default:
         return Number::invalid;
     }
   },
 /* print */ [](MatchState*, StyledText& out) {
-  out<< style::Enum("rgba8uint")<< style::Plain(", ") << style::Enum("rgba16uint")<< style::Plain(", ") << style::Enum("r32uint")<< style::Plain(", ") << style::Enum("rg32uint")<< style::Plain(" or ") << style::Enum("rgba32uint");
+  out<< style::Enum("r8uint")<< style::Plain(", ") << style::Enum("rg8uint")<< style::Plain(", ") << style::Enum("r16uint")<< style::Plain(", ") << style::Enum("rg16uint")<< style::Plain(", ") << style::Enum("rgba8uint")<< style::Plain(", ") << style::Enum("rgba16uint")<< style::Plain(", ") << style::Enum("r32uint")<< style::Plain(", ") << style::Enum("rg32uint")<< style::Plain(", ") << style::Enum("rgba32uint")<< style::Plain(" or ") << style::Enum("rgb10a2uint");
   }
 };
 
@@ -1335,7 +1357,6 @@ constexpr MatcherIndex kMatcherIndices[] = {
   /* [196] */ MatcherIndex(40),
   /* [197] */ MatcherIndex(45),
   /* [198] */ MatcherIndex(46),
-  /* [199] */ MatcherIndex(47),
 };
 
 static_assert(MatcherIndicesIndex::CanIndex(kMatcherIndices),
@@ -3131,12 +3152,6 @@ constexpr TemplateInfo kTemplates[] = {
     /* [19] */
     /* name */ "T",
     /* matcher_indices */ MatcherIndicesIndex(198),
-    /* kind */ TemplateInfo::Kind::kType,
-  },
-  {
-    /* [20] */
-    /* name */ "T",
-    /* matcher_indices */ MatcherIndicesIndex(199),
     /* kind */ TemplateInfo::Kind::kType,
   },
 };
@@ -5202,17 +5217,6 @@ constexpr OverloadInfo kOverloads[] = {
     /* return_matcher_indices */ MatcherIndicesIndex(/* invalid */),
     /* const_eval_fn */ ConstEvalFunctionIndex(/* invalid */),
   },
-  {
-    /* [187] */
-    /* flags */ OverloadFlags(OverloadFlag::kIsOperator, OverloadFlag::kSupportsVertexPipeline, OverloadFlag::kSupportsFragmentPipeline, OverloadFlag::kSupportsComputePipeline),
-    /* num_parameters */ 2,
-    /* num_explicit_templates */ 0,
-    /* num_templates   */ 1,
-    /* templates */ TemplateIndex(20),
-    /* parameters */ ParameterIndex(319),
-    /* return_matcher_indices */ MatcherIndicesIndex(3),
-    /* const_eval_fn */ ConstEvalFunctionIndex(/* invalid */),
-  },
 };
 
 static_assert(OverloadIndex::CanIndex(kOverloads),
@@ -5613,23 +5617,6 @@ constexpr IntrinsicInfo kBuiltins[] = {
   },
 };
 
-constexpr IntrinsicInfo kBinaryOperators[] = {
-  {
-    /* [0] */
-    /* op +[T : iu8](T, T) -> T */
-    /* num overloads */ 1,
-    /* overloads */ OverloadIndex(187),
-  },
-  {
-    /* [1] */
-    /* op *[T : iu8](T, T) -> T */
-    /* num overloads */ 1,
-    /* overloads */ OverloadIndex(187),
-  },
-};
-constexpr uint8_t kBinaryOperatorPlus = 0;
-constexpr uint8_t kBinaryOperatorStar = 1;
-
 // clang-format on
 
 }  // anonymous namespace
@@ -5644,9 +5631,9 @@ const core::intrinsic::TableData Dialect::kData{
     /* const_eval_functions */ Empty,
     /* ctor_conv */ Empty,
     /* builtins */ kBuiltins,
-    /* binary '+' */ kBinaryOperators[kBinaryOperatorPlus],
+    /* binary '+' */ tint::core::intrinsic::kNoOverloads,
     /* binary '-' */ tint::core::intrinsic::kNoOverloads,
-    /* binary '*' */ kBinaryOperators[kBinaryOperatorStar],
+    /* binary '*' */ tint::core::intrinsic::kNoOverloads,
     /* binary '/' */ tint::core::intrinsic::kNoOverloads,
     /* binary '%' */ tint::core::intrinsic::kNoOverloads,
     /* binary '^' */ tint::core::intrinsic::kNoOverloads,

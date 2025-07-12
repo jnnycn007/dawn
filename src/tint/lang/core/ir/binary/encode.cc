@@ -31,12 +31,10 @@
 #include <string>
 #include <utility>
 
-#include "src/tint/lang/core/builtin_fn.h"
-#include "src/tint/lang/core/builtin_type.h"
-#include "src/tint/lang/core/builtin_value.h"
 #include "src/tint/lang/core/constant/composite.h"
 #include "src/tint/lang/core/constant/scalar.h"
 #include "src/tint/lang/core/constant/splat.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/ir/access.h"
 #include "src/tint/lang/core/ir/bitcast.h"
 #include "src/tint/lang/core/ir/break_if.h"
@@ -67,7 +65,6 @@
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/var.h"
-#include "src/tint/lang/core/texel_format.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/binding_array.h"
 #include "src/tint/lang/core/type/bool.h"
@@ -943,6 +940,50 @@ struct Encoder {
                 return pb::TexelFormat::rgba8_uint;
             case core::TexelFormat::kRgba8Unorm:
                 return pb::TexelFormat::rgba8_unorm;
+            case core::TexelFormat::kR8Snorm:
+                return pb::TexelFormat::r8_snorm;
+            case core::TexelFormat::kR8Uint:
+                return pb::TexelFormat::r8_uint;
+            case core::TexelFormat::kR8Sint:
+                return pb::TexelFormat::r8_sint;
+            case core::TexelFormat::kRg8Unorm:
+                return pb::TexelFormat::rg8_unorm;
+            case core::TexelFormat::kRg8Snorm:
+                return pb::TexelFormat::rg8_snorm;
+            case core::TexelFormat::kRg8Uint:
+                return pb::TexelFormat::rg8_uint;
+            case core::TexelFormat::kRg8Sint:
+                return pb::TexelFormat::rg8_sint;
+            case core::TexelFormat::kR16Uint:
+                return pb::TexelFormat::r16_uint;
+            case core::TexelFormat::kR16Sint:
+                return pb::TexelFormat::r16_sint;
+            case core::TexelFormat::kR16Float:
+                return pb::TexelFormat::r16_float;
+            case core::TexelFormat::kRg16Uint:
+                return pb::TexelFormat::rg16_uint;
+            case core::TexelFormat::kRg16Sint:
+                return pb::TexelFormat::rg16_sint;
+            case core::TexelFormat::kRg16Float:
+                return pb::TexelFormat::rg16_float;
+            case core::TexelFormat::kRgb10A2Uint:
+                return pb::TexelFormat::rgb10a2_uint;
+            case core::TexelFormat::kRgb10A2Unorm:
+                return pb::TexelFormat::rgb10a2_unorm;
+            case core::TexelFormat::kRg11B10Ufloat:
+                return pb::TexelFormat::rg11b10_ufloat;
+            case core::TexelFormat::kR16Unorm:
+                return pb::TexelFormat::r16_unorm;
+            case core::TexelFormat::kR16Snorm:
+                return pb::TexelFormat::r16_snorm;
+            case core::TexelFormat::kRg16Unorm:
+                return pb::TexelFormat::rg16_unorm;
+            case core::TexelFormat::kRg16Snorm:
+                return pb::TexelFormat::rg16_snorm;
+            case core::TexelFormat::kRgba16Unorm:
+                return pb::TexelFormat::rgba16_unorm;
+            case core::TexelFormat::kRgba16Snorm:
+                return pb::TexelFormat::rgba16_snorm;
             case core::TexelFormat::kUndefined:
                 break;
         }

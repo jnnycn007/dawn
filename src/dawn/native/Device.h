@@ -37,6 +37,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "dawn/common/ContentLessObjectCache.h"
+#include "dawn/common/Defer.h"
 #include "dawn/common/Mutex.h"
 #include "dawn/common/NonMovable.h"
 #include "dawn/common/RefCountedWithExternalCount.h"
@@ -46,6 +47,7 @@
 #include "dawn/native/Commands.h"
 #include "dawn/native/ComputePipeline.h"
 #include "dawn/native/CreatePipelineAsyncEvent.h"
+#include "dawn/native/DeviceGuard.h"
 #include "dawn/native/Error.h"
 #include "dawn/native/ErrorSink.h"
 #include "dawn/native/ExecutionQueue.h"
@@ -59,6 +61,7 @@
 #include "dawn/native/Toggles.h"
 #include "dawn/native/UsageValidationMode.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "partition_alloc/pointers/raw_ptr_exclusion.h"
 
 #include "dawn/native/DawnNative.h"
 #include "dawn/native/dawn_platform.h"
@@ -129,6 +132,9 @@ class DeviceBase : public ErrorSink,
                      wgpu::DeviceLostReason lost_reason = wgpu::DeviceLostReason::Unknown);
 
     MaybeError ValidateObject(const ApiObjectBase* object) const;
+
+    // Similar to ValidateObject, but skips the Device check. Asserts that validation is disabled.
+    MaybeError IsNotErrorObject(const ApiObjectBase* object) const;
 
     InstanceBase* GetInstance() const;
     AdapterBase* GetAdapter() const;
@@ -406,11 +412,14 @@ class DeviceBase : public ErrorSink,
     virtual void AppendDeviceLostMessage(ErrorData* error) {}
 
     // It is guaranteed that the wrapped mutex will outlive the Device (if the Device is deleted
-    // before the AutoLockAndHoldRef).
-    [[nodiscard]] Mutex::AutoLockAndHoldRef GetScopedLockSafeForDelete();
-    // This lock won't guarantee the wrapped mutex will be alive if the Device is deleted before the
-    // AutoLock. It would crash if such thing happens.
-    [[nodiscard]] Mutex::AutoLock GetScopedLock();
+    // before ~DeviceGuard).
+    [[nodiscard]] DeviceGuard GetGuardForDelete();
+    // This guard won't guarantee the wrapped mutex will be alive if the Device is deleted before
+    // ~DeviceGuard. It would crash if such thing happens.
+    [[nodiscard]] DeviceGuard GetGuard();
+    // Defers cleanup or finishing functions that happen once the device mutex is released if we are
+    // holding the lock. Otherwise, performs the task now.
+    void DeferIfLocked(std::function<void()> f);
 
     // This method returns true if Feature::ImplicitDeviceSynchronization is turned on and the
     // device is locked by current thread. This method is only enabled when DAWN_ENABLE_ASSERTS is
@@ -616,8 +625,12 @@ class DeviceBase : public ErrorSink,
     // We cache this toggle so that we can check it without locking the device.
     bool mIsImmediateErrorHandlingEnabled = false;
 
-    // This pointer is non-null if Feature::ImplicitDeviceSynchronization is turned on.
-    Ref<Mutex> mMutex = nullptr;
+    // This pointer is non-null if Feature::ImplicitDeviceSynchronization is turned on. Note that
+    // this is a currently a recursive lock, but should only really be used recursively for error
+    // handling.
+    friend class DeviceGuard;
+    Ref<RecursiveMutex> mMutex = nullptr;
+    std::optional<class Defer> mDefer = std::nullopt;
 };
 
 ResultOrError<Ref<PipelineLayoutBase>> ValidateLayoutAndGetComputePipelineDescriptorWithDefaults(

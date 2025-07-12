@@ -33,11 +33,10 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "src/tint/lang/core/address_space.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/ir/ir_helper_test.h"
 #include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/core/number.h"
-#include "src/tint/lang/core/texel_format.h"
 #include "src/tint/lang/core/type/abstract_float.h"
 #include "src/tint/lang/core/type/abstract_int.h"
 #include "src/tint/lang/core/type/manager.h"
@@ -1115,6 +1114,27 @@ TEST_P(AddressSpace_AccessMode, Test) {
         EXPECT_THAT(res.Failure().reason,
                     testing::HasSubstr("uniform and handle pointers must be read access"));
     }
+}
+
+TEST_F(IR_ValidatorTest, StructureMemberSizeTooSmall) {
+    auto* str_ty =
+        ty.Struct(mod.symbols.New("S"),
+                  Vector{
+                      ty.Get<type::StructMember>(mod.symbols.New("a"), ty.array<u32, 3>(), 0u, 0u,
+                                                 4u, 4u, IOAttributes{}),
+                  });
+    mod.root_block->Append(b.Var("my_struct", private_, str_ty));
+
+    auto* fn = b.Function("F", ty.void_());
+    b.Append(fn->Block(), [&] { b.Return(fn); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(
+        res.Failure().reason,
+        testing::HasSubstr(
+            "struct member 0 with size=4 must be at least as large as the type with size 12"))
+        << res.Failure();
 }
 
 INSTANTIATE_TEST_SUITE_P(IR_ValidatorTest,

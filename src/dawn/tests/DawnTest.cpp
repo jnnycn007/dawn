@@ -426,7 +426,11 @@ std::unique_ptr<native::Instance> DawnTestEnvironment::CreateInstance(
 
     wgpu::InstanceDescriptor instanceDesc{};
     instanceDesc.nextInChain = &dawnInstanceDesc;
-    instanceDesc.capabilities.timedWaitAnyEnable = !UsesWire();
+    if (!UsesWire()) {
+        static constexpr auto kTimedWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
+        instanceDesc.requiredFeatureCount = 1;
+        instanceDesc.requiredFeatures = &kTimedWaitAny;
+    }
 
     auto instance = std::make_unique<native::Instance>(
         reinterpret_cast<const WGPUInstanceDescriptor*>(&instanceDesc));
@@ -1112,6 +1116,10 @@ std::vector<wgpu::FeatureName> DawnTestBase::GetRequiredFeatures() {
 void DawnTestBase::GetRequiredLimits(const dawn::utils::ComboLimits& supported,
                                      dawn::utils::ComboLimits& required) {}
 
+bool DawnTestBase::GetRequireUseTieredLimits() {
+    return false;
+}
+
 const TestAdapterProperties& DawnTestBase::GetAdapterProperties() const {
     return mParam.adapterProperties;
 }
@@ -1292,6 +1300,10 @@ void DawnTestBase::SetUp() {
         &adapter);
     FlushWire();
     DAWN_ASSERT(adapter);
+    mRequireUseTieredLimits = GetRequireUseTieredLimits();
+    if (mRequireUseTieredLimits) {
+        mBackendAdapter.SetUseTieredLimits(true);
+    }
     adapter.GetLimits(adapterLimits.GetLinked());
 
     device = CreateDevice();
@@ -1306,6 +1318,9 @@ void DawnTestBase::SetUp() {
 void DawnTestBase::TearDown() {
     ResolveDeferredExpectationsNow();
 
+    if (mRequireUseTieredLimits) {
+        mBackendAdapter.SetUseTieredLimits(false);
+    }
     if (!UsesWire()) {
         EXPECT_EQ(mLastWarningCount, GetDeprecationWarningCountForTesting());
     }

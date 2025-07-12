@@ -100,7 +100,7 @@ deps = {
   },
 
   'third_party/depot_tools': {
-    'url': '{chromium_git}/chromium/tools/depot_tools.git@d255a8d41e7a2fdc6b50fee69e70014f875d47ef',
+    'url': '{chromium_git}/chromium/tools/depot_tools.git@5cc29c7a217801cfa7b7b0aa23144300b49b750d',
     'condition': 'dawn_standalone',
   },
 
@@ -271,22 +271,22 @@ deps = {
   },
 
   'third_party/angle': {
-    'url': '{chromium_git}/angle/angle@b3ec3a5f54489630d7fee057c3d1042964010156',
+    'url': '{chromium_git}/angle/angle@ee071b31d1c7a55ccc2416ae55626b45be0e3ac5',
     'condition': 'dawn_standalone',
   },
 
   'third_party/swiftshader': {
-    'url': '{swiftshader_git}/SwiftShader@436722b391188ad8c1d1d5dd2447c38ac7f71439',
+    'url': '{swiftshader_git}/SwiftShader@c1f7fbbec4e17769c0182daae185466cb806d0d5',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-deps': {
-    'url': '{chromium_git}/vulkan-deps@e9ab451bc13cc726e02aed164ff96b8d1e4db0cb',
+    'url': '{chromium_git}/vulkan-deps@f236b7ac474d27c9720357a6f4498d03ef97f8ae',
     'condition': 'dawn_standalone',
   },
 
   'third_party/glslang/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/glslang@0e41d3137e125b557dafa79675563c6cabdde392',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/glslang@4056002eb2401b9406e78b9ea71fd0ce65737ebe',
     'condition': 'dawn_standalone',
   },
 
@@ -296,37 +296,37 @@ deps = {
   },
 
   'third_party/spirv-headers/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Headers@9e3836d7d6023843a72ecd3fbf3f09b1b6747a9e',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Headers@c8ad050fcb29e42a2f57d9f59e97488f465c436d',
     'condition': 'dawn_standalone',
   },
 
   'third_party/spirv-tools/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Tools@28a883ba4c67f58a9540fb0651c647bb02883622',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Tools@257a227fbadf8176ea386c7d8fb9b889cbf08640',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-headers/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Headers@10739e8e00a7b6f74d22dd0a547f1406ff1f5eb9',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Headers@7cff847503174e2049b08253ee5f30428866fea3',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-loader/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Loader@342da33fdec78d269657194c9082835d647d2e68',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Loader@da8d2caad9341ca8c5a7c3deba217d7da50a7c24',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-tools/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Tools@e3fc64396755191b3c51e5c57d0454872e7fa487',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Tools@06ae73a3dc3a03466817d8370355203dac7b79b1',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-utility-libraries/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Utility-Libraries@72665ee1e50db3d949080df8d727dffa8067f5f8',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Utility-Libraries@cb20eb451cf2e272daaf40099e864a916d8b5542',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-validation-layers/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-ValidationLayers@7ea54b07b00bb7f7026d363027a0355ab508b18b',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-ValidationLayers@9c4e3e0816b388488dce9cc25fd6e5cc465358d0',
     'condition': 'dawn_standalone',
   },
 
@@ -341,7 +341,7 @@ deps = {
   },
 
   'third_party/dxc': {
-    'url': '{chromium_git}/external/github.com/microsoft/DirectXShaderCompiler@93c7c2c8e62358ec3600350ce5763dfadbb6d3a0',
+    'url': '{chromium_git}/external/github.com/microsoft/DirectXShaderCompiler@68dedee546982f23a47766c20d37d587befb5ed0',
   },
 
   'third_party/dxheaders': {
@@ -360,7 +360,7 @@ deps = {
 
   # WebGPU CTS - not used directly by Dawn, only transitively by Chromium.
   'third_party/webgpu-cts': {
-    'url': '{chromium_git}/external/github.com/gpuweb/cts@2a8d4a83f751286302ce34573409ad75cc318508',
+    'url': '{chromium_git}/external/github.com/gpuweb/cts@6185b7a62891825a1c51b68fffd5d9caf7afcbcc',
     'condition': 'build_with_chromium',
   },
 
@@ -382,13 +382,13 @@ deps = {
     'condition': 'dawn_node',
   },
   'third_party/gpuweb': {
-    'url': '{chromium_git}/external/github.com/gpuweb/gpuweb@3275987646c485123a32b3816a0d57a0f15475c2',
+    'url': '{chromium_git}/external/github.com/gpuweb/gpuweb@a2637f7b880c2556919cdb288fe89815e0ed1c41',
     'condition': 'dawn_node',
   },
 
   # Upstream webgpu.h headers for testing purposes
   'third_party/webgpu-headers/src': {
-    'url': '{chromium_git}/external/github.com/webgpu-native/webgpu-headers@4f617851dfa20bd240436d9255bcb7e4dbbb1e3f',
+    'url': '{chromium_git}/external/github.com/webgpu-native/webgpu-headers@c8b371dd2ff8a2b028fdc0206af5958521181ba8',
   },
 
   'tools/golang': {
@@ -672,7 +672,7 @@ hooks = [
 
   # Activate emsdk for WebAssembly builds
   {
-    'name': 'activate_emsdk_linux',
+    'name': 'activate_emsdk',
     'pattern': '.',
     'condition': 'dawn_wasm',
     'action': [ 'python3', 'tools/activate-emsdk' ],
