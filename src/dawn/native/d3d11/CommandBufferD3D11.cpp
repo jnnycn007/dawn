@@ -52,6 +52,7 @@
 #include "dawn/native/d3d11/DeviceD3D11.h"
 #include "dawn/native/d3d11/Forward.h"
 #include "dawn/native/d3d11/PipelineLayoutD3D11.h"
+#include "dawn/native/d3d11/PipelineStateTrackerD3D11.h"
 #include "dawn/native/d3d11/QuerySetD3D11.h"
 #include "dawn/native/d3d11/RenderPipelineD3D11.h"
 #include "dawn/native/d3d11/TextureD3D11.h"
@@ -294,6 +295,7 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
         return {};
     };
 
+    PipelineStateTracker pipelineStateTracker(commandContext);
     size_t nextComputePassNumber = 0;
     size_t nextRenderPassNumber = 0;
 
@@ -309,7 +311,7 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
                     }
                     DAWN_TRY(LazyClearSyncScope(scope));
                 }
-                DAWN_TRY(ExecuteComputePass(commandContext));
+                DAWN_TRY(ExecuteComputePass(commandContext, &pipelineStateTracker));
 
                 nextComputePassNumber++;
                 break;
@@ -332,7 +334,7 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
                 }
                 DAWN_TRY(
                     LazyClearSyncScope(GetResourceUsages().renderPasses[nextRenderPassNumber]));
-                DAWN_TRY(ExecuteRenderPass(cmd, commandContext));
+                DAWN_TRY(ExecuteRenderPass(cmd, commandContext, &pipelineStateTracker));
 
                 nextRenderPassNumber++;
                 break;
@@ -532,7 +534,8 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
 }
 
 MaybeError CommandBuffer::ExecuteComputePass(
-    const ScopedSwapStateCommandRecordingContext* commandContext) {
+    const ScopedSwapStateCommandRecordingContext* commandContext,
+    PipelineStateTracker* pipelineStateTracker) {
     ComputePipeline* lastPipeline = nullptr;
     ComputePassBindGroupTracker bindGroupTracker(commandContext);
 
@@ -583,7 +586,7 @@ MaybeError CommandBuffer::ExecuteComputePass(
             case Command::SetComputePipeline: {
                 SetComputePipelineCmd* cmd = mCommands.NextCommand<SetComputePipelineCmd>();
                 lastPipeline = ToBackend(cmd->pipeline).Get();
-                lastPipeline->ApplyNow(commandContext);
+                lastPipeline->ApplyNow(pipelineStateTracker);
                 bindGroupTracker.OnSetPipeline(lastPipeline);
                 immediates.OnSetPipeline(lastPipeline);
                 break;
@@ -633,7 +636,8 @@ MaybeError CommandBuffer::ExecuteComputePass(
 
 MaybeError CommandBuffer::ExecuteRenderPass(
     BeginRenderPassCmd* renderPass,
-    const ScopedSwapStateCommandRecordingContext* commandContext) {
+    const ScopedSwapStateCommandRecordingContext* commandContext,
+    PipelineStateTracker* pipelineStateTracker) {
     // For the color attachments that the clear_color_with_draw workaround has applied, we can skip
     // the clear for them.
     for (auto i : ClearWithDrawHelper::GetAppliedColorAttachments(GetDevice(), renderPass)) {
@@ -830,7 +834,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                 SetRenderPipelineCmd* cmd = iter->NextCommand<SetRenderPipelineCmd>();
 
                 lastPipeline = ToBackend(cmd->pipeline.Get());
-                lastPipeline->ApplyNow(commandContext, blendColor, stencilReference);
+                lastPipeline->ApplyNow(pipelineStateTracker, blendColor, stencilReference);
                 bindGroupTracker.OnSetPipeline(lastPipeline);
                 immediates.OnSetPipeline(lastPipeline);
 
@@ -963,7 +967,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                 SetStencilReferenceCmd* cmd = mCommands.NextCommand<SetStencilReferenceCmd>();
                 stencilReference = cmd->reference;
                 if (lastPipeline) {
-                    lastPipeline->ApplyDepthStencilState(commandContext, stencilReference);
+                    lastPipeline->ApplyDepthStencilState(pipelineStateTracker, stencilReference);
                 }
                 break;
             }
@@ -996,7 +1000,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                 SetBlendConstantCmd* cmd = mCommands.NextCommand<SetBlendConstantCmd>();
                 blendColor = ConvertToFloatColor(cmd->color);
                 if (lastPipeline) {
-                    lastPipeline->ApplyBlendState(commandContext, blendColor);
+                    lastPipeline->ApplyBlendState(pipelineStateTracker, blendColor);
                 }
                 break;
             }
