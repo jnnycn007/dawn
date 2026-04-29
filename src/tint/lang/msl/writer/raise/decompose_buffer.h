@@ -1,4 +1,4 @@
-// Copyright 2024 The Dawn & Tint Authors
+// Copyright 2026 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,27 +25,50 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/type/u8.h"
+#ifndef SRC_TINT_LANG_MSL_WRITER_RAISE_DECOMPOSE_BUFFER_H_
+#define SRC_TINT_LANG_MSL_WRITER_RAISE_DECOMPOSE_BUFFER_H_
 
-#include "src/tint/lang/core/type/manager.h"
+#include <unordered_map>
+#include <unordered_set>
 
-TINT_INSTANTIATE_TYPEINFO(tint::core::type::U8);
+#include "src/tint/utils/result.h"
 
-namespace tint::core::type {
+// Forward declarations.
+namespace tint::core::ir {
+class Module;
+}  // namespace tint::core::ir
 
-U8::U8()
-    : Base(static_cast<size_t>(tint::TypeCode::Of<U8>().bits),
-           core::type::Flags{
-               Flag::kConstructable,
-               Flag::kCreationFixedFootprint,
-               Flag::kFixedFootprint,
-               Flag::kHostShareable,
-           }) {}
+namespace tint::msl::writer::raise {
 
-U8::~U8() = default;
+/// Decompose buffer_view functions.
+///
+/// Handles the following functions:
+/// * bufferLength
+/// * bufferView
+/// * bufferArrayView
+/// * arrayLength
+///
+/// bufferView and bufferArrayView calls that propagate across function boundaries to arrayLength
+/// calls change the parameter type from a pointer to a structure containing a pointer and two u32s
+/// (offset and size).
+///
+/// Pass dependencies:
+/// After:
+/// * SingleEntryPoint
+/// * SubstituteOverrides
+/// * PropagateBufferSizes
+/// * Robustness
+///
+/// Before:
+/// * ArrayLengthFromUniform/Immediate
+///
+/// This pass requires the following capabilities:
+/// * kMslAllowEntryPointInterface (for pointers in structs)
+///
+/// @param module The module
+/// @returns Success or Failure
+Result<SuccessType> DecomposeBuffer(core::ir::Module& module);
 
-U8* U8::Clone(CloneContext& ctx) const {
-    return ctx.dst.mgr->Get<U8>();
-}
+}  // namespace tint::msl::writer::raise
 
-}  // namespace tint::core::type
+#endif  // SRC_TINT_LANG_MSL_WRITER_RAISE_DECOMPOSE_BUFFER_H_
