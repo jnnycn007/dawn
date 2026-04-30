@@ -688,16 +688,13 @@ MaybeError CaptureRenderPass(CaptureContext& captureContext, CommandIterator& co
     return {};
 }
 
-template <typename T>
 MaybeError AddReferencedPassResourceUsages(CaptureContext& captureContext,
-                                           const std::vector<T>& syncScopeResourceUsages) {
-    for (const auto& usages : syncScopeResourceUsages) {
-        for (auto buffer : usages.buffers) {
-            DAWN_TRY(captureContext.AddResource(ToBackend(buffer)));
-        }
-        for (auto texture : usages.textures) {
-            DAWN_TRY(captureContext.AddResource(ToBackend(texture)));
-        }
+                                           const SyncScopeResourceUsage& usages) {
+    for (auto buffer : usages.buffers) {
+        DAWN_TRY(captureContext.AddResource(ToBackend(buffer)));
+    }
+    for (auto texture : usages.textures) {
+        DAWN_TRY(captureContext.AddResource(ToBackend(texture)));
     }
     return {};
 }
@@ -715,9 +712,13 @@ MaybeError CommandBuffer::AddReferenced(CaptureContext& captureContext) {
     for (auto querySet : resourceUsages.usedQuerySets) {
         DAWN_TRY(captureContext.AddResource(ToBackend(querySet)));
     }
-    DAWN_TRY(AddReferencedPassResourceUsages(captureContext, resourceUsages.renderPasses));
+    for (const auto& usages : resourceUsages.renderPasses) {
+        DAWN_TRY(AddReferencedPassResourceUsages(captureContext, usages));
+    }
     for (const auto& pass : resourceUsages.computePasses) {
-        DAWN_TRY(AddReferencedPassResourceUsages(captureContext, pass.dispatchUsages));
+        for (const auto& usages : pass.dispatchUsages) {
+            DAWN_TRY(AddReferencedPassResourceUsages(captureContext, usages));
+        }
     }
 
     CommandBufferResourceUsages usedResources;
@@ -1013,8 +1014,8 @@ ResultOrError<WGPUCommandBuffer> CommandBuffer::Encode() {
     WGPUCommandEncoder innerEncoder =
         wgpu.deviceCreateCommandEncoder(ToBackend(GetDevice())->GetInnerHandle(), nullptr);
 
-    size_t nextComputePassNumber = 0;
-    size_t nextRenderPassNumber = 0;
+    PassIndex nextComputePassNumber{0};
+    PassIndex nextRenderPassNumber{0};
 
     Command type;
     while (mCommands.NextCommandId(&type)) {
