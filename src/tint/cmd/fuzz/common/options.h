@@ -1,4 +1,4 @@
-// Copyright 2025 The Dawn & Tint Authors
+// Copyright 2026 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,19 +25,33 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/cmd/fuzz/common/ir_fuzzer.h"
-#include "src/tint/lang/core/ir/transform/dead_code_elimination.h"
-#include "src/tint/lang/core/ir/validator.h"
+#ifndef SRC_TINT_CMD_FUZZ_COMMON_OPTIONS_H_
+#define SRC_TINT_CMD_FUZZ_COMMON_OPTIONS_H_
 
-namespace tint::core::ir::transform {
-namespace {
+#include <string>
 
-Result<SuccessType> DeadCodeEliminationFuzzer(Module& ir, const fuzz::ir::Context&) {
-    return DeadCodeElimination(ir);
-}
+namespace tint::fuzz::common {
 
-}  // namespace
-}  // namespace tint::core::ir::transform
+/// Options for the fuzzer.
+struct Options {
+    /// If not empty, only run the fuzzers with the given substring.
+    std::string filter;
+    /// If true, the fuzzers will be run concurrently on separate threads.
+    bool run_concurrently = false;
+    /// If true, print the fuzzer name to stdout before running.
+    bool verbose = false;
+    /// If not empty, load DXC from this path when fuzzing HLSL generation.
+    std::string dxc;
+#if TINT_BUILD_FUZZER_VULKAN_SUPPORT
+    /// If not empty, load the Vulkan ICD from this path when fuzzing SPIR-V generation.
+    std::string vk_icd;
+#endif
+    /// If true, dump shader input/output text to stdout
+    bool dump = false;
+    /// If true, dump the IR whenever validation is performed.
+    bool dump_ir_when_validating = false;
+};
 
-TINT_IR_MODULE_FUZZER(tint::core::ir::transform::DeadCodeEliminationFuzzer,
-                      tint::core::ir::transform::kDeadCodeEliminationCapabilities);
+}  // namespace tint::fuzz::common
+
+#endif  // SRC_TINT_CMD_FUZZ_COMMON_OPTIONS_H_

@@ -1,4 +1,4 @@
-// Copyright 2025 The Dawn & Tint Authors
+// Copyright 2026 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,19 +25,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/cmd/fuzz/common/ir_fuzzer.h"
-#include "src/tint/lang/core/ir/transform/dead_code_elimination.h"
-#include "src/tint/lang/core/ir/validator.h"
+#ifndef SRC_TINT_CMD_FUZZ_COMMON_INIT_H_
+#define SRC_TINT_CMD_FUZZ_COMMON_INIT_H_
 
-namespace tint::core::ir::transform {
-namespace {
+#include "src/tint/cmd/fuzz/common/options.h"
+#include "src/utils/compiler.h"
 
-Result<SuccessType> DeadCodeEliminationFuzzer(Module& ir, const fuzz::ir::Context&) {
-    return DeadCodeElimination(ir);
-}
+namespace tint::fuzz::common {
 
-}  // namespace
-}  // namespace tint::core::ir::transform
+/// ParseFuzzerOptions parses the command line arguments and populates the fuzzer options.
+/// @param argc the number of command line arguments
+/// @param argv the command line arguments
+/// @param options the options to populate
+/// @returns 0 on success, or a non-zero value on failure
+int ParseFuzzerOptions(int* argc, char*** argv, Options* options);
 
-TINT_IR_MODULE_FUZZER(tint::core::ir::transform::DeadCodeEliminationFuzzer,
-                      tint::core::ir::transform::kDeadCodeEliminationCapabilities);
+}  // namespace tint::fuzz::common
+
+#endif  // SRC_TINT_CMD_FUZZ_COMMON_INIT_H_
