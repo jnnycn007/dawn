@@ -39,6 +39,7 @@
 #include "dawn/native/Adapter.h"
 #include "dawn/native/ChainUtils.h"
 #include "dawn/native/Surface.h"
+#include "dawn/native/webgpu/CaptureContext.h"
 #include "dawn/native/webgpu/DeviceWGPU.h"
 #include "dawn/native/webgpu/QueueWGPU.h"
 #include "dawn/native/webgpu/TextureWGPU.h"
@@ -155,6 +156,11 @@ ResultOrError<Ref<SwapChain>> SwapChain::Create(Device* device,
 
     device->wgpu->surfaceConfigure(innerSurface, &innerConfig);
 
+    if (ToBackend(device->GetQueue())->IsCapturing()) {
+        CaptureContext* context = ToBackend(device->GetQueue())->GetCaptureContext();
+        context->CaptureSurfaceConfigure(surface, config);
+    }
+
     return AcquireRef(new SwapChain(device, surface, config, innerSurface));
 }
 
@@ -194,6 +200,11 @@ ResultOrError<SwapChainTextureInfo> SwapChain::GetCurrentTextureImpl() {
     UnpackedPtr<TextureDescriptor> unpacked = Unpack(&desc);
     texture = Texture::CreateFromSurfaceTexture(device, unpacked, innerSurfaceTexture);
 
+    if (ToBackend(device->GetQueue())->IsCapturing()) {
+        CaptureContext* context = ToBackend(device->GetQueue())->GetCaptureContext();
+        DAWN_TRY(context->CaptureSurfaceGetCurrentTexture(GetSurface(), texture.Get()));
+    }
+
     mCurrentTexture = texture;
     info.texture = std::move(texture);
 
@@ -206,6 +217,11 @@ MaybeError SwapChain::PresentImpl() {
     WGPUStatus status = device->wgpu->surfacePresent(mInnerHandle);
 
     DAWN_TRY(CheckWGPUSuccess(status, "surfacePresent"));
+
+    if (ToBackend(device->GetQueue())->IsCapturing()) {
+        CaptureContext* context = ToBackend(device->GetQueue())->GetCaptureContext();
+        context->CaptureSurfacePresent(GetSurface());
+    }
 
     DAWN_ASSERT(mCurrentTexture != nullptr);
     mCurrentTexture->Destroy();
