@@ -121,7 +121,8 @@ inline MaybeError StreamOut(Source* s) {
 
 // Stream specialization for fundamental types.
 template <typename T>
-class Stream<T, std::enable_if_t<std::is_fundamental_v<T>>> {
+    requires(std::is_fundamental_v<T>)
+class Stream<T> {
   public:
     static void Write(Sink* sink, const T& v) {
         auto value = std::as_bytes(std::span(&v, 1u));
@@ -146,7 +147,8 @@ constexpr bool BitsetSupportsToUllong(size_t N) {
 
 // Stream specialization for bitsets that are smaller than BitsetUllong.
 template <size_t N>
-class Stream<std::bitset<N>, std::enable_if_t<detail::BitsetSupportsToUllong(N)>> {
+    requires(detail::BitsetSupportsToUllong(N))
+class Stream<std::bitset<N>> {
   public:
     static void Write(Sink* s, const std::bitset<N>& t) { StreamIn(s, t.to_ullong()); }
     static MaybeError Read(Source* s, std::bitset<N>* v) {
@@ -159,7 +161,8 @@ class Stream<std::bitset<N>, std::enable_if_t<detail::BitsetSupportsToUllong(N)>
 
 // Stream specialization for bitsets since using the built-in to_ullong has a size limit.
 template <size_t N>
-class Stream<std::bitset<N>, std::enable_if_t<!detail::BitsetSupportsToUllong(N)>> {
+    requires(!detail::BitsetSupportsToUllong(N))
+class Stream<std::bitset<N>> {
   public:
     static void Write(Sink* s, const std::bitset<N>& t) {
         // Iterate in chunks of detail::BitsetUllong.
@@ -198,7 +201,8 @@ class Stream<ityp::bitset<Index, N>> {
 
 // Stream specialization for enums.
 template <typename T>
-class Stream<T, std::enable_if_t<std::is_enum_v<T>>> {
+    requires(std::is_enum_v<T>)
+class Stream<T> {
     using U = std::underlying_type_t<T>;
 
   public:
@@ -232,7 +236,8 @@ class Stream<::dawn::detail::TypedIntegerImpl<Tag, Integer>> {
 // To handle nullptr scenarios, we always serialize whether the pointer was not nullptr,
 // followed by the contents if applicable.
 template <typename T>
-class Stream<T, std::enable_if_t<std::is_pointer_v<T>>> {
+    requires(std::is_pointer_v<T>)
+class Stream<T> {
   public:
     static void Write(stream::Sink* sink, const T& t) {
         using Pointee = std::decay_t<std::remove_pointer_t<T>>;
@@ -251,7 +256,8 @@ class Stream<T, std::enable_if_t<std::is_pointer_v<T>>> {
 // pointer. To handle nullptr scenarios, we always serialize whether the pointer was not nullptr,
 // followed by the contents if applicable.
 template <typename T>
-class Stream<std::unique_ptr<T>, std::enable_if_t<!std::is_pointer_v<T>>> {
+    requires(!std::is_pointer_v<T>)
+class Stream<std::unique_ptr<T>> {
   public:
     static void Write(stream::Sink* sink, const std::unique_ptr<T>& t) {
         StreamIn(sink, t != nullptr);
@@ -312,7 +318,8 @@ class Stream<std::optional<T>> {
 
 // Stream specialization for fixed arrays of fundamental types.
 template <typename T, size_t N>
-class Stream<T[N], std::enable_if_t<std::is_fundamental_v<T>>> {
+    requires(std::is_fundamental_v<T>)
+class Stream<T[N]> {
   public:
     static void Write(Sink* sink, const T (&t)[N]) {
         static_assert(N > 0);
@@ -330,7 +337,8 @@ class Stream<T[N], std::enable_if_t<std::is_fundamental_v<T>>> {
 
 // Specialization for fixed arrays of non-fundamental types.
 template <typename T, size_t N>
-class Stream<T[N], std::enable_if_t<!std::is_fundamental_v<T>>> {
+    requires(!std::is_fundamental_v<T>)
+class Stream<T[N]> {
   public:
     static void Write(Sink* s, const T (&t)[N]) {
         static_assert(N > 0);
@@ -378,7 +386,8 @@ class Stream<std::vector<T>> {
 
 // Stream specialization for std::array<T, Size> of fundamental types T.
 template <typename T, size_t Size>
-class Stream<std::array<T, Size>, std::enable_if_t<std::is_fundamental_v<T>>> {
+    requires(std::is_fundamental_v<T>)
+class Stream<std::array<T, Size>> {
   public:
     static void Write(Sink* sink, const std::array<T, Size>& t) {
         static_assert(Size > 0);
@@ -396,7 +405,8 @@ class Stream<std::array<T, Size>, std::enable_if_t<std::is_fundamental_v<T>>> {
 
 // Stream specialization for std::array<T, Size> of non-fundamental types T.
 template <typename T, size_t Size>
-class Stream<std::array<T, Size>, std::enable_if_t<!std::is_fundamental_v<T>>> {
+    requires(!std::is_fundamental_v<T>)
+class Stream<std::array<T, Size>> {
   public:
     static void Write(Sink* s, const std::array<T, Size>& v) {
         static_assert(Size > 0);
@@ -606,11 +616,10 @@ class Stream<std::variant<Types...>> {
 
   private:
     // WriteImpl template for trying multiple possible value types
-    template <size_t N,
-              typename TryType,
-              typename... RemainingTypes,
-              typename = std::enable_if_t<sizeof...(RemainingTypes) != 0>>
-    static inline void WriteImpl(stream::Sink* sink, const VariantType& t) {
+    template <size_t N, typename TryType, typename... RemainingTypes>
+    static inline void WriteImpl(stream::Sink* sink, const VariantType& t)
+        requires(sizeof...(RemainingTypes) != 0)
+    {
         if (std::holds_alternative<TryType>(t)) {
             // Record the type index
             StreamIn(sink, N);
@@ -632,11 +641,10 @@ class Stream<std::variant<Types...>> {
         StreamIn(sink, std::get<LastType>(t));
     }
     // ReadImpl template for trying multiple possible value types
-    template <size_t N,
-              typename TryType,
-              typename... RemainingTypes,
-              typename = std::enable_if_t<sizeof...(RemainingTypes) != 0>>
-    static inline MaybeError ReadImpl(stream::Source* source, VariantType* t, size_t typeId) {
+    template <size_t N, typename TryType, typename... RemainingTypes>
+    static inline MaybeError ReadImpl(stream::Source* source, VariantType* t, size_t typeId)
+        requires(sizeof...(RemainingTypes) != 0)
+    {
         if (typeId == N) {
             // Read the value
             TryType value;
